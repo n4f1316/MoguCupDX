@@ -101,15 +101,19 @@ td input{padding:3px 6px;font-size:14px}
         <label style="display:flex;gap:6px;align-items:center;align-self:end;color:var(--fg)"><input id="sOpen" type="checkbox">参加申請を受け付ける</label>
         <label>申請の締切（日本時間、空欄で期限なし）<input id="sDeadline" type="datetime-local"></label>
       </div>
-      <label>申請ページのお知らせ<textarea id="sNotice" rows="2"></textarea></label>
-      <h2>自選曲の譜面定数</h2>
+      <label>参加者ページのお知らせ<textarea id="sNotice" rows="2"></textarea></label>
+      <h2>いまの段階</h2>
       <div class="row">
-        <label>下限（0 で下限なし）<input id="sMin" type="number" step="0.1" min="0" max="15"></label>
-        <label>上限<input id="sCap" type="number" step="0.1" min="1" max="15"></label>
+        <label>段階（参加者ができること）<select id="sPhase"></select></label>
+        <label>段階の一言（締切など。参加者ページに表示）<input id="sPhaseNote" type="text" placeholder="例 10/20 23:59 まで"></label>
       </div>
-      <p class="note" id="capInfo"></p>
-      <h2>運営課題曲</h2>
-      <div id="kadaiPicker"></div>
+      <p class="note">組み合わせ発表前 → 自選曲の提出 → BAN → 自選曲の決定 → 対戦曲確定 の順に切り替えます。BAN の段階になると、相手の自選曲が参加者に公開されます。</p>
+      <h2>新しい対戦カードの既定値</h2>
+      <div class="row">
+        <label>自選曲の上限（譜面定数）<input id="sDefCap" type="number" step="0.1" min="1" max="15"></label>
+        <div><label for="defKadai">運営課題曲</label><div id="defKadaiPicker"></div></div>
+      </div>
+      <p class="note">ペアを作るときに各試合へ入ります。試合ごとの値は「組み合わせ・選曲」で変えられます。</p>
       <h2>告知画像の下に入れる一言</h2>
       <label>組み合わせ発表<input id="nPair" type="text"></label>
       <label>選曲公開<input id="nReveal" type="text"></label>
@@ -123,9 +127,10 @@ td input{padding:3px 6px;font-size:14px}
           <button type="button" id="pairFrate">2fRATE順にペアを作る</button>
           <button type="button" id="pairRandom">ランダムにペアを作る</button>
           <button type="button" id="addMatch">対戦カードを追加</button>
+          <button type="button" id="applyDefaults">既定の上限・課題曲を全試合に入れる</button>
         </div>
       </div>
-      <p class="note">ペアを作り直すと、入力済みの選曲は消えます（2回押すと確定）。自選曲は譜面定数の上限・下限の範囲から検索できます。</p>
+      <p class="note">ペアを作り直すと、それまでの選曲は使われなくなります（2回押すと確定）。参加者が提出した選曲はここに表示され、運営が代わりに入力・修正することもできます。</p>
       <p class="warn" id="pairWarn" hidden></p>
       <div id="matchList" style="display:grid;gap:12px"></div>
     </section>

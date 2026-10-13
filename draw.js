@@ -130,6 +130,7 @@ const DrawKit = (() => {
     });
     ctx.font = `800 56px ${FD}`; ctx.fillStyle = C.accent; ctx.textAlign = 'center';
     ctx.fillText('VS', W / 2, top + 18 + (cardH * 3 + 32) / 2 + 20);
+    if (m.cap != null) fit(`上限 定数${fmtConst(Number(m.cap))}`, W - 80, top - 50, 400, 22, 500, FM, 'right', C.mute);
     return top + 18 + 3 * (cardH + 16);
   }
 
@@ -150,7 +151,7 @@ const DrawKit = (() => {
     fit('対戦曲', 80, y + 60, 400, 40, 800, FD, 'left', C.fg);
     const cw = (W - 160 - 40) / 3, ch = 170, cy = y + 124;
     const picked = (sd) => (m[sd + 'Pick'] >= 0 ? m[sd + 'Songs'][m[sd + 'Pick']] : null);
-    [[picked('a'), m.aName + ' の自選曲'], [picked('b'), m.bName + ' の自選曲'], [V.kadai, '運営課題曲']].forEach(([s, lab], k) => {
+    [[picked('a'), m.aName + ' の自選曲'], [picked('b'), m.bName + ' の自選曲'], [m.kadai, '運営課題曲']].forEach(([s, lab], k) => {
       const x = 80 + k * (cw + 20);
       fit(lab, x + 4, cy - 8, cw - 8, 24, 700, FB, 'left', k === 2 ? C.accent : C.mute);
       songCard(s, x, cy + 6, cw, ch, { hi: !!s, img: s && imgs.get(s.key), empty: '未定' });
@@ -165,7 +166,7 @@ const DrawKit = (() => {
     if (kind === 'pair') { drawPair(); return; }
     const m = V.matches[idx];
     if (!m) { base(400, '対戦カードがありません'); return; }
-    const charts = [...m.aSongs, ...m.bSongs, kind === 'final' ? V.kadai : null].filter(Boolean);
+    const charts = [...m.aSongs, ...m.bSongs, kind === 'final' ? m.kadai : null].filter(Boolean);
     const imgs = new Map();
     await Promise.all(charts.map(async (s) => imgs.set(s.key, await loadImg(jacketURL(s.img)))));
     if (kind === 'reveal') drawReveal(m, idx, imgs); else drawFinal(m, idx, imgs);

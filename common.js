@@ -24,7 +24,21 @@ const DIFF_SHORT = { BASIC: 'BAS', ADVANCED: 'ADV', EXPERT: 'EXP', MASTER: 'MAS'
 // 譜面定数 → レベル表記（.6 以上は +）
 function levelOf(c) {
   const i = Math.floor(c + 1e-9);
+  if (i < 7) return String(i);
   return i + (c - i >= 0.6 - 1e-9 ? '+' : '');
+}
+const levelOrder = (lv) => parseInt(lv, 10) + (String(lv).endsWith('+') ? 0.5 : 0);
+
+// 参加者ページ用：ジャケットは公式サイトの画像を直接表示する（2fRATE と同じ）
+const JACKET_BASES = ['https://maimaidx.jp/maimai-mobile/img/Music/', 'https://maimai.sega.jp/storage/DX_jacket/'];
+function jacketEl(file) {
+  if (!file) { const d = document.createElement('div'); d.className = 'jk'; return d; }
+  const img = document.createElement('img');
+  let i = 0;
+  img.className = 'jk'; img.alt = ''; img.loading = 'lazy'; img.decoding = 'async';
+  img.src = JACKET_BASES[0] + file;
+  img.onerror = () => { i++; if (i < JACKET_BASES.length) img.src = JACKET_BASES[i] + file; else { const d = document.createElement('div'); d.className = 'jk'; img.replaceWith(d); } };
+  return img;
 }
 const fmtConst = (c) => (Math.round(c * 10) / 10).toFixed(1);
 
