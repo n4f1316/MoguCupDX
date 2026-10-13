@@ -18,7 +18,7 @@ async function api(path, { method = 'GET', body, key } = {}) {
 }
 
 const DIFF_ORDER = ['BASIC', 'ADVANCED', 'EXPERT', 'MASTER', 'Re:MASTER'];
-const DIFF_COLOR = { BASIC: '#3fb52a', ADVANCED: '#f2a900', EXPERT: '#f0525f', MASTER: '#9b4fd6', 'Re:MASTER': '#c9a6f0' };
+const DIFF_COLOR = { BASIC: '#2e9e5b', ADVANCED: '#c98200', EXPERT: '#e0434b', MASTER: '#8e44d6', 'Re:MASTER': '#a679e0' };
 const DIFF_SHORT = { BASIC: 'BAS', ADVANCED: 'ADV', EXPERT: 'EXP', MASTER: 'MAS', 'Re:MASTER': 'Re:MAS' };
 
 // 譜面定数 → レベル表記（.6 以上は +）
@@ -39,6 +39,21 @@ function jacketEl(file) {
   img.src = JACKET_BASES[0] + file;
   img.onerror = () => { i++; if (i < JACKET_BASES.length) img.src = JACKET_BASES[i] + file; else { const d = document.createElement('div'); d.className = 'jk'; img.replaceWith(d); } };
   return img;
+}
+// 対戦曲の決め方
+//   本編（format: 'main'）：両者の自選曲＋運営課題曲。両者が同じ曲を自選曲にしたときだけ、その曲＋運営課題曲2曲
+//   mini（format: 'mini'）：両者の自選曲だけ（運営課題曲なし）。同じ曲なら1曲
+// 戻り値：[{ key, label, kind: 'a' | 'b' | 'both' | 'kadai' }]
+function finalSongs({ format, aKey, bKey, aName, bName, kadai, kadai2 }) {
+  const same = aKey && bKey && aKey === bKey;
+  const out = same
+    ? [{ key: aKey, label: '両者の自選曲', kind: 'both' }]
+    : [{ key: aKey || '', label: `${aName} の自選曲`, kind: 'a' }, { key: bKey || '', label: `${bName} の自選曲`, kind: 'b' }];
+  if (format !== 'mini') {
+    out.push({ key: kadai || '', label: same ? '運営課題曲1' : '運営課題曲', kind: 'kadai' });
+    if (same) out.push({ key: kadai2 || '', label: '運営課題曲2', kind: 'kadai' });
+  }
+  return out;
 }
 const fmtConst = (c) => (Math.round(c * 10) / 10).toFixed(1);
 

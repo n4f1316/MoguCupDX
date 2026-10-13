@@ -37,7 +37,7 @@ td input{padding:3px 6px;font-size:14px}
 .warn{color:var(--danger);font-size:13px;margin:0}
 /* 譜面検索 */
 .picker{position:relative;display:grid;gap:2px}
-.picker .list{position:absolute;z-index:5;top:100%;left:0;right:0;max-height:300px;overflow:auto;background:var(--panel);border:1px solid var(--line);border-radius:6px;box-shadow:0 6px 20px rgba(0,0,0,.18);margin-top:2px}
+.picker .list{position:absolute;z-index:5;top:100%;left:0;right:0;max-height:300px;overflow:auto;background:var(--panel);border:1px solid var(--line);border-radius:6px;box-shadow:0 6px 20px rgba(31,45,61,.12);margin-top:2px}
 .picker .list button{all:unset;box-sizing:border-box;display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;width:100%;padding:6px 10px;cursor:pointer;font-size:14px}
 .picker .list button:hover,.picker .list button.on{background:var(--soft)}
 .picker .list .meta{font-family:var(--f-mono);font-size:12px;color:var(--muted)}
@@ -102,6 +102,12 @@ td input{padding:3px 6px;font-size:14px}
         <label>申請の締切（日本時間、空欄で期限なし）<input id="sDeadline" type="datetime-local"></label>
       </div>
       <label>参加者ページのお知らせ<textarea id="sNotice" rows="2"></textarea></label>
+      <h2>大会の形式</h2>
+      <label>形式<select id="sFormat">
+        <option value="main">本編（自選曲＋他選曲＋運営課題曲）</option>
+        <option value="mini">mini（運営課題曲なし、自選曲の投げ合いのみ）</option>
+      </select></label>
+      <p class="note">本編では、両者が同じ曲を自選曲にしたときだけ、運営課題曲を2曲にします（その曲＋運営課題曲2曲）。</p>
       <h2>いまの段階</h2>
       <div class="row">
         <label>段階（参加者ができること）<select id="sPhase"></select></label>
@@ -111,7 +117,8 @@ td input{padding:3px 6px;font-size:14px}
       <h2>新しい対戦カードの既定値</h2>
       <div class="row">
         <label>自選曲の上限（譜面定数）<input id="sDefCap" type="number" step="0.1" min="1" max="15"></label>
-        <div><label for="defKadai">運営課題曲</label><div id="defKadaiPicker"></div></div>
+        <div class="mainOnly"><label for="defKadai">運営課題曲</label><div id="defKadaiPicker"></div></div>
+        <div class="mainOnly"><label for="defKadai2">運営課題曲2（同じ曲になったとき用）</label><div id="defKadai2Picker"></div></div>
       </div>
       <p class="note">ペアを作るときに各試合へ入ります。試合ごとの値は「組み合わせ・選曲」で変えられます。</p>
       <h2>告知画像の下に入れる一言</h2>

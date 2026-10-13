@@ -1,15 +1,12 @@
-/* もぐらたたきカップ 共通スタイル：土の茶色と、もぐらたたきのハンマーのオレンジ */
+/* もぐらたたきカップ 共通スタイル：白と青。目が疲れにくいよう、真っ白ではなく少し青みのある白に濃紺の文字 */
 :root{
-  --bg:#f6f3ee; --panel:#ffffff; --fg:#2b2620; --muted:#7a7066; --line:#e3dcd2;
-  --accent:#c2571a; --accent-fg:#fff; --soft:#f1e6da; --danger:#b3261e; --ok:#2e7d32;
+  --bg:#f3f7fb; --panel:#ffffff; --fg:#1f2d3d; --muted:#5b6f86; --line:#d6e2ee;
+  --accent:#2a6fb8; --accent-fg:#ffffff; --soft:#e7f0f9; --danger:#c8323f; --ok:#23804a;
   --f-display:"M PLUS Rounded 1c","Hiragino Maru Gothic ProN",system-ui,sans-serif;
   --f-body:"Zen Kaku Gothic New","Hiragino Sans","Noto Sans JP",system-ui,sans-serif;
   --f-mono:"JetBrains Mono",ui-monospace,monospace;
   color-scheme:light;
 }
-@media (prefers-color-scheme:dark){:root{
-  --bg:#1b1815; --panel:#24201c; --fg:#efe8df; --muted:#a59a8e; --line:#3a332c;
-  --accent:#e8813f; --accent-fg:#1b1815; --soft:#332a22; --danger:#ef7a70; --ok:#7cc47f; color-scheme:dark}}
 *{box-sizing:border-box}
 [hidden]{display:none!important}
 html{-webkit-text-size-adjust:100%}
