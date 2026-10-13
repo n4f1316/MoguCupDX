@@ -38,7 +38,7 @@ const DrawKit = (() => {
     for (let y = 60; y < h; y += 150) for (let x = (y / 150) % 2 ? 40 : 115; x < W; x += 150) { ctx.beginPath(); ctx.ellipse(x, y, 46, 16, 0, 0, Math.PI * 2); ctx.fill(); }
     ctx.fillStyle = C.accent; ctx.fillRect(0, 0, W, 10);
     ctx.textBaseline = 'alphabetic';
-    fit(V.title || 'もぐらたたきカップ', 80, 92, 900, 34, 800, FD, 'left', C.mute);
+    fit((V.title || 'もぐらたたきカップ') + (V.divName ? '　' + V.divName : ''), 80, 92, 1000, 34, 800, FD, 'left', C.mute);
     fit(heading, 80, 170, 1000, 72, 800, FD, 'left', C.fg);
     if (V.round) {
       ctx.font = `800 34px ${FD}`;
@@ -130,7 +130,7 @@ const DrawKit = (() => {
     });
     ctx.font = `800 56px ${FD}`; ctx.fillStyle = C.accent; ctx.textAlign = 'center';
     ctx.fillText('VS', W / 2, top + 18 + (cardH * 3 + 32) / 2 + 20);
-    if (m.cap != null) fit(`上限 定数${fmtConst(Number(m.cap))}`, W - 80, top - 50, 400, 22, 500, FM, 'right', C.mute);
+    if (m.cap != null) fit(`上限 定数${fmtConst(Number(m.cap))}${m.lv14 ? '＋Lv14 1曲' : ''}`, W - 80, top - 50, 520, 22, 500, FM, 'right', m.lv14 ? C.goldText : C.mute);
     return top + 18 + 3 * (cardH + 16);
   }
 

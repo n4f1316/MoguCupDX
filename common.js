@@ -40,6 +40,16 @@ function jacketEl(file) {
   img.onerror = () => { i++; if (i < JACKET_BASES.length) img.src = JACKET_BASES[i] + file; else { const d = document.createElement('div'); d.className = 'jk'; img.replaceWith(d); } };
   return img;
 }
+// 部門と神プレート（申請の設問）
+const DIVISIONS = [{ id: 'lime', name: 'らいむ部門' }, { id: 'lemon', name: 'れもん部門' }];
+const divName = (id) => DIVISIONS.find((d) => d.id === id)?.name || '';
+const PLATES = ['真', '超', '檄', '橙', '暁', '桃', '櫻', '紫', '菫', '白', '雪', '輝', '舞', '熊', '華', '爽', '煌', '宙', '星', '祭', '祝', '双', '宴', '鏡', '彩', '丸', '廻'];
+
+// 自選曲として選べるか：上限以下。Lv14解禁の試合では、上限を超える Lv14（14.0〜14.5）も候補（1曲まで）
+const isLv14 = (c) => c >= 14 - 1e-9 && c < 14.6 - 1e-9;
+const overCap = (c, cap) => c > Number(cap) + 1e-9;
+const selectable = (c, cap, lv14) => !overCap(c, cap) || (lv14 && isLv14(c));
+
 // 対戦曲の決め方
 //   本編（format: 'main'）：両者の自選曲＋運営課題曲。両者が同じ曲を自選曲にしたときだけ、その曲＋運営課題曲2曲
 //   mini（format: 'mini'）：両者の自選曲だけ（運営課題曲なし）。同じ曲なら1曲

@@ -6,7 +6,7 @@
 <meta name="robots" content="noindex">
 <title>もぐらたたきカップ 運営</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=M+PLUS+Rounded+1c:wght@500;800&family=Zen+Kaku+Gothic+New:wght@400;700&family=JetBrains+Mono:wght@500&display=swap">
-<link rel="stylesheet" href="common.css?v=20261014b">
+<link rel="stylesheet" href="common.css?v=20261014c">
 <style>
 main{max-width:1280px;margin:0 auto;display:grid;gap:16px}
 .top{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:8px 16px}
@@ -21,6 +21,7 @@ th,td{padding:6px 8px;border-bottom:1px solid var(--line);text-align:left;white-
 th button{all:unset;cursor:pointer;color:var(--muted);font-size:12px}
 th button:focus-visible{outline:2px solid var(--accent)}
 td.num,th.num{text-align:right}
+td .btns{flex-wrap:nowrap}
 td input{padding:3px 6px;font-size:14px}
 /* 組み合わせ */
 .match{border:1px solid var(--line);border-radius:8px;padding:12px;display:grid;gap:10px}
@@ -50,6 +51,9 @@ td input{padding:3px 6px;font-size:14px}
 .canvasbox{border:1px solid var(--line);border-radius:8px;overflow:hidden;background:var(--soft)}
 .canvasbox img{display:block;width:100%;height:auto}
 #login{max-width:420px}
+.divdef{border-left:3px solid var(--accent);padding-left:12px;display:grid;gap:8px}
+.divdef h3{margin:0;font-family:var(--f-display);font-size:.95rem;color:var(--accent)}
+#matchDiv button[aria-selected="true"],#imgDiv button[aria-selected="true"]{background:var(--accent);color:var(--accent-fg);border-color:var(--accent)}
 </style>
 </head>
 <body>
@@ -84,11 +88,12 @@ td input{padding:3px 6px;font-size:14px}
       <div class="btns" style="justify-content:space-between">
         <h2 style="margin:0">参加者 <span id="entryCount" class="num"></span></h2>
         <div class="btns">
+          <select id="entryDiv" aria-label="部門で絞り込む" style="width:auto"></select>
           <button type="button" id="csv">CSVで書き出す</button>
         </div>
       </div>
       <div class="tablewrap"><table id="entryTable"></table></div>
-      <p class="note">行の「編集」で内容を直せます。削除は2回押すと確定します。</p>
+      <p class="note">見出しを押すと並べ替えます。「編集」では名前・X・Discord・部門・レート・2fRATE・メモを直せます（部門別の回答は直せません）。削除は2回押すと確定します。「神」は神プレートの数と、その頭文字です。</p>
     </section>
 
     <section class="panel" data-pane="settings" hidden>
@@ -114,12 +119,8 @@ td input{padding:3px 6px;font-size:14px}
         <label>段階の一言（締切など。参加者ページに表示）<input id="sPhaseNote" type="text" placeholder="例 10/20 23:59 まで"></label>
       </div>
       <p class="note">組み合わせ発表前 → 自選曲の提出 → BAN → 自選曲の決定 → 対戦曲確定 の順に切り替えます。BAN の段階になると、相手の自選曲が参加者に公開されます。</p>
-      <h2>新しい対戦カードの既定値</h2>
-      <div class="row">
-        <label>自選曲の上限（譜面定数）<input id="sDefCap" type="number" step="0.1" min="1" max="15"></label>
-        <div class="mainOnly"><label for="defKadai">運営課題曲</label><div id="defKadaiPicker"></div></div>
-        <div class="mainOnly"><label for="defKadai2">運営課題曲2（同じ曲になったとき用）</label><div id="defKadai2Picker"></div></div>
-      </div>
+      <h2>新しい対戦カードの既定値（部門ごと）</h2>
+      <div id="divDefaults" style="display:grid;gap:12px"></div>
       <p class="note">ペアを作るときに各試合へ入ります。試合ごとの値は「組み合わせ・選曲」で変えられます。</p>
       <h2>告知画像の下に入れる一言</h2>
       <label>組み合わせ発表<input id="nPair" type="text"></label>
@@ -130,19 +131,21 @@ td input{padding:3px 6px;font-size:14px}
     <section class="panel" data-pane="matches" hidden>
       <div class="btns" style="justify-content:space-between">
         <h2 style="margin:0">組み合わせ・選曲</h2>
+        <div class="tabs" role="group" aria-label="部門" id="matchDiv"></div>
         <div class="btns">
           <button type="button" id="pairFrate">2fRATE順にペアを作る</button>
           <button type="button" id="pairRandom">ランダムにペアを作る</button>
           <button type="button" id="addMatch">対戦カードを追加</button>
-          <button type="button" id="applyDefaults">既定の上限・課題曲を全試合に入れる</button>
+          <button type="button" id="applyDefaults">既定の上限・課題曲をこの部門の全試合に入れる</button>
         </div>
       </div>
-      <p class="note">ペアを作り直すと、それまでの選曲は使われなくなります（2回押すと確定）。参加者が提出した選曲はここに表示され、運営が代わりに入力・修正することもできます。</p>
+      <p class="note">部門を選んでから操作します。ペアはその部門に申請した人だけで作ります。らいむ部門では、両者が Q10 に「はい」と答えた試合は自動で Lv14 解禁になります。ペアを作り直すと、それまでの選曲は使われなくなります（2回押すと確定）。参加者が提出した選曲はここに表示され、運営が代わりに入力・修正することもできます。</p>
       <p class="warn" id="pairWarn" hidden></p>
       <div id="matchList" style="display:grid;gap:12px"></div>
     </section>
 
     <section class="panel" data-pane="images" hidden>
+      <div class="tabs" role="group" aria-label="部門" id="imgDiv"></div>
       <div class="btns">
         <div class="tabs" role="group" aria-label="画像の種類" id="kindTabs">
           <button type="button" data-kind="pair" aria-selected="true">組み合わせ発表</button>
@@ -162,9 +165,9 @@ td input{padding:3px 6px;font-size:14px}
 </main>
 <canvas id="cv" hidden></canvas>
 
-<script src="config.js?v=20261014b"></script>
-<script src="common.js?v=20261014b"></script>
-<script src="draw.js?v=20261014b"></script>
-<script src="admin.js?v=20261014b"></script>
+<script src="config.js?v=20261014c"></script>
+<script src="common.js?v=20261014c"></script>
+<script src="draw.js?v=20261014c"></script>
+<script src="admin.js?v=20261014c"></script>
 </body>
 </html>

@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>もぐらたたきカップ</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=M+PLUS+Rounded+1c:wght@500;800&family=Zen+Kaku+Gothic+New:wght@400;700&family=JetBrains+Mono:wght@500&display=swap">
-<link rel="stylesheet" href="common.css?v=20261014b">
+<link rel="stylesheet" href="common.css?v=20261014c">
 <style>
 main{max-width:720px;margin:0 auto;display:grid;gap:16px}
 .hero{display:grid;gap:4px;padding-block:8px}
@@ -43,13 +43,13 @@ main{max-width:720px;margin:0 auto;display:grid;gap:16px}
 .tabs button{border-radius:999px;padding:4px 12px;font-size:13px}
 .tabs button[aria-pressed="true"]{background:var(--fg);color:var(--bg);border-color:var(--fg)}
 .list{border:1px solid var(--line);border-radius:12px;overflow:hidden}
-.row{all:unset;box-sizing:border-box;display:grid;grid-template-columns:44px minmax(0,1fr) auto;gap:10px;align-items:center;width:100%;padding:8px 12px;border-top:1px solid var(--line);cursor:pointer}
-.row:first-child{border-top:0}
-.row:hover{background:var(--soft)}
-.row:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
-.row.on{background:var(--soft)}
-.row .go{font-size:12px;font-weight:800;color:var(--accent);white-space:nowrap}
-.row[aria-disabled="true"]{opacity:.45;cursor:not-allowed}
+.srow{all:unset;box-sizing:border-box;display:grid;grid-template-columns:44px minmax(0,1fr) auto;gap:10px;align-items:center;width:100%;padding:8px 12px;border-top:1px solid var(--line);cursor:pointer}
+.srow:first-child{border-top:0}
+.srow:hover{background:var(--soft)}
+.srow:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
+.srow.on{background:var(--soft)}
+.srow .go{font-size:12px;font-weight:800;color:var(--accent);white-space:nowrap}
+.srow[aria-disabled="true"]{opacity:.45;cursor:not-allowed}
 .pager{display:flex;flex-wrap:wrap;justify-content:center;gap:6px}
 .pager button{min-width:40px;padding:4px 10px;border-radius:999px}
 .pager button.cur{background:var(--fg);color:var(--bg);border-color:var(--fg)}
@@ -62,9 +62,22 @@ main{max-width:720px;margin:0 auto;display:grid;gap:16px}
 .choice.banned{opacity:.5;cursor:not-allowed;text-decoration:line-through}
 .tag{font-size:11px;font-weight:800;padding:2px 8px;border-radius:999px;white-space:nowrap}
 .tag.ban{background:#E0434B;color:#fff} .tag.pick{background:var(--accent);color:var(--accent-fg)}
+.q{color:var(--fg);font-size:14px}
+.q small{color:var(--muted);font-size:12px;line-height:1.6}
+.q i{font-style:normal;font-size:11px;color:var(--danger);margin-left:4px}
+fieldset.q{border:0;padding:0;margin:0;display:grid;gap:6px;min-width:0}
+fieldset.q legend{padding:0;margin-bottom:4px}
+.checks{display:flex;flex-wrap:wrap;gap:6px 14px}
+.checks label{display:flex;align-items:center;gap:6px;color:var(--fg);font-size:14px}
+.checks.plates{gap:6px}
+.checks.plates label{border:1px solid var(--line);border-radius:999px;padding:3px 10px 3px 6px;background:var(--bg)}
+.checks.plates label:has(input:checked){border-color:var(--accent);background:var(--soft)}
+.divq{border-left:3px solid var(--accent);padding-left:12px;display:grid;gap:12px}
+.divq h3{margin:0;font-family:var(--f-display);font-size:1rem;color:var(--accent)}
+.lv14{display:inline-block;font-size:11px;font-weight:800;padding:2px 8px;border-radius:999px;background:#fff3d6;color:#8a5a00;margin-left:6px}
 .hp{position:absolute;left:-9999px;width:1px;height:1px;overflow:hidden}
 .foot{font-size:12px;color:var(--muted);line-height:1.8}
-@media (max-width:520px){.row{grid-template-columns:40px minmax(0,1fr)}.row .go{display:none}.jk{width:40px;height:40px}.song{grid-template-columns:40px minmax(0,1fr) auto}}
+@media (max-width:520px){.srow{grid-template-columns:40px minmax(0,1fr)}.srow .go{display:none}.jk{width:40px;height:40px}.song{grid-template-columns:40px minmax(0,1fr) auto}}
 </style>
 </head>
 <body>
@@ -109,18 +122,52 @@ main{max-width:720px;margin:0 auto;display:grid;gap:16px}
   <!-- 参加申請 -->
   <form class="panel" id="entryForm" hidden novalidate>
     <h2>参加申請</h2>
-    <label>エントリー名（大会で表示される名前、20文字まで）
+    <label class="q"><span><b>Q1.</b> あなたの X（Twitter）の ID を教えてください <i>必須</i></span>
+      <input id="xId" type="text" maxlength="16" placeholder="記入例：@Porto_mint" autocapitalize="off" spellcheck="false">
+    </label>
+    <label class="q"><span><b>Q2.</b> あなたが Discord で使用している名前を教えてください <i>必須</i></span>
+      <small>マッチング決定後のロール振り分けや、Discord サーバーへの参加の可否を確認するために使用します。Discord Nitro に課金していてサーバーでの名前を変える予定の方は、本スコアタの Discord サーバーで使用する名前を記入してください。</small>
+      <input id="discord" type="text" maxlength="40" autocapitalize="off" spellcheck="false">
+    </label>
+    <label class="q"><span><b>Q3.</b> あなたがスコアタで使用する名前を記入してください <i>必須</i></span>
       <input id="entryName" type="text" maxlength="20" autocomplete="nickname">
     </label>
-    <label>X（Twitter）の ID
-      <input id="xId" type="text" maxlength="16" placeholder="@ なしで入力" autocapitalize="off" spellcheck="false">
-    </label>
+    <fieldset class="q"><legend><b>Q4.</b> あなたが参加したい部門を選択してください（複数選択可） <i>必須</i></legend>
+      <div class="checks" id="divChecks"></div>
+    </fieldset>
     <div class="row">
-      <label>maimai のレート<input id="rating" type="number" inputmode="numeric" min="0" max="20000" step="1" placeholder="例 15800"></label>
-      <label>2fRATE（☆7まで）<input id="frate" type="number" inputmode="decimal" min="0" max="30" step="0.001" placeholder="例 13.452"></label>
+      <label class="q"><span><b>Q5.</b> あなたの現在のレートを教えてください <i>必須</i></span>
+        <input id="rating" type="number" inputmode="numeric" min="0" max="20000" step="1" placeholder="例 15800">
+      </label>
+      <label class="q"><span>2fRATE（☆7まで） <i>必須</i></span>
+        <input id="frate" type="number" inputmode="decimal" min="0" max="30" step="0.001" placeholder="例 13.452">
+        <small><a href="https://n4f1316.github.io/dxscore-tools/" target="_blank" rel="noopener">2fRATE のページ</a>で確認できます</small>
+      </label>
+    </div>
+    <fieldset class="q"><legend><b>Q6.</b> あなたの神プレートの獲得状況について教えてください</legend>
+      <small>回答するのは、14以上の MASTER 譜面が終了しているものにしてください。該当なしの場合は未回答で大丈夫です。</small>
+      <div class="checks plates" id="plateChecks"></div>
+    </fieldset>
+    <div class="divq" id="qLime" hidden>
+      <h3>らいむ部門</h3>
+      <div class="row">
+        <label class="q"><span><b>Q7.</b> MASTER の星5達成譜面数 <i>必須</i></span><input id="m5" type="number" inputmode="numeric" min="0" step="1"></label>
+        <label class="q"><span><b>Q8.</b> Re:MASTER の星5達成譜面数 <i>必須</i></span><input id="r5" type="number" inputmode="numeric" min="0" step="1"></label>
+        <label class="q"><span><b>Q9.</b> MASTER・Re:MASTER の星6達成合計譜面数 <i>必須</i></span><input id="s6" type="number" inputmode="numeric" min="0" step="1"></label>
+      </div>
+      <fieldset class="q"><legend><b>Q10.</b> 自選曲にレベル14を1曲含められるようにしたいですか？ <i>必須</i></legend>
+        <small>マッチング決定時に両者が承諾した場合にのみ、レベル14が解禁されます。そのため、承諾した場合でもレベル14を自選曲に含められない可能性があります。</small>
+        <div class="checks"><label><input type="radio" name="lv14" value="yes">はい</label><label><input type="radio" name="lv14" value="no">いいえ</label></div>
+      </fieldset>
+    </div>
+    <div class="divq" id="qLemon" hidden>
+      <h3>れもん部門</h3>
+      <div class="row">
+        <label class="q"><span><b>Q11.</b> レベル14の AP 達成譜面数 <i>必須</i></span><input id="ap14" type="number" inputmode="numeric" min="0" step="1"></label>
+        <label class="q"><span><b>Q12.</b> レベル14+の AP 達成譜面数 <i>必須</i></span><input id="ap14p" type="number" inputmode="numeric" min="0" step="1"></label>
+      </div>
     </div>
     <div class="hp" aria-hidden="true"><label>website<input id="website" tabindex="-1" autocomplete="off"></label></div>
-    <p class="note">2fRATE は <a href="https://n4f1316.github.io/dxscore-tools/" target="_blank" rel="noopener">2fRATE のページ</a>で確認できます。</p>
     <div class="btns"><button class="primary" type="submit">申請する</button></div>
   </form>
 
@@ -130,14 +177,14 @@ main{max-width:720px;margin:0 auto;display:grid;gap:16px}
     <p class="note">内容を直したいときは運営に連絡してください。</p>
   </section>
 
-  <!-- 自分の試合 -->
-  <section class="panel" id="matchBox" hidden></section>
+  <!-- 自分の試合（部門ごと） -->
+  <div id="matchBox" style="display:grid;gap:16px" hidden></div>
 
   <p class="foot">非公式のファンメイドツールです。株式会社セガおよび関連会社とは一切関係ありません。楽曲・ジャケット画像の著作権は、株式会社セガおよび各権利者に帰属します。</p>
 </main>
 
-<script src="config.js?v=20261014b"></script>
-<script src="common.js?v=20261014b"></script>
-<script src="player.js?v=20261014b"></script>
+<script src="config.js?v=20261014c"></script>
+<script src="common.js?v=20261014c"></script>
+<script src="player.js?v=20261014c"></script>
 </body>
 </html>
