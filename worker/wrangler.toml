@@ -1,0 +1,12 @@
+name = "mogucupdx"
+main = "worker.js"
+compatibility_date = "2026-06-01"
+
+[vars]
+ALLOWED_ORIGINS = "https://n4f1316.github.io"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "mogucupdx"
+# `npx wrangler d1 create mogucupdx` で表示された database_id に書き換えてください
+database_id = "REPLACE_WITH_DATABASE_ID"
