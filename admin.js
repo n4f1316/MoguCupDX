@@ -1,0 +1,413 @@
+// もぐらたたきカップ 運営ページ
+const $ = (s, r = document) => r.querySelector(s);
+const $$ = (s, r = document) => [...r.querySelectorAll(s)];
+const KEY_STORE = 'mogucupdx-admin-key';
+
+let KEY = '';
+let entries = [];      // [{ id, entry_name, x_id, rating, frate, memo, created_at }]
+let settings = null;   // 大会設定
+let matches = [];      // [{ a, b, aSongs:[key×3], bSongs, aBan, aPick, bBan, bPick }]
+let charts = null;     // { list, byKey }
+let dirty = false;
+
+function setMsg(t, cls = '') { const m = $('#msg'); m.textContent = t; m.className = 'msg ' + cls; }
+function markDirty() { dirty = true; $('#dirty').hidden = false; }
+window.addEventListener('beforeunload', (e) => { if (dirty) { e.preventDefault(); e.returnValue = ''; } });
+
+// 2回押しで確定するボタン
+function confirmTwice(btn, text, fn) {
+  if (btn.dataset.armed) { delete btn.dataset.armed; btn.textContent = btn.dataset.label; fn(); return; }
+  btn.dataset.label = btn.textContent; btn.dataset.armed = '1'; btn.textContent = text;
+  setTimeout(() => { if (btn.dataset.armed) { delete btn.dataset.armed; btn.textContent = btn.dataset.label; } }, 4000);
+}
+
+// ---------- ログイン ----------
+try { KEY = localStorage.getItem(KEY_STORE) || sessionStorage.getItem(KEY_STORE) || ''; } catch {}
+$('#login').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  KEY = $('#key').value.trim();
+  if (!KEY) return setMsg('鍵を入力してください', 'err');
+  await start(true);
+});
+$('#logout').onclick = () => {
+  try { localStorage.removeItem(KEY_STORE); sessionStorage.removeItem(KEY_STORE); } catch {}
+  location.reload();
+};
+
+async function start(fromForm) {
+  setMsg('読み込んでいます…');
+  try {
+    const [e, st] = await Promise.all([api('api/admin/entries', { key: KEY }), api('api/admin/state', { key: KEY })]);
+    entries = e.entries; settings = st.settings; matches = normalizeMatches(st.matches);
+    if (fromForm) {
+      try {
+        const store = $('#remember').checked ? localStorage : sessionStorage;
+        store.setItem(KEY_STORE, KEY);
+      } catch {}
+    }
+    $('#login').hidden = true; $('#app').hidden = false; $('#savebar').hidden = false;
+    dirty = false; $('#dirty').hidden = true;
+    setMsg('');
+    renderAll();
+    loadCharts().then((c) => { charts = c; renderAll(); }).catch(() => setMsg('譜面データを読み込めませんでした。ページを再読み込みしてください', 'err'));
+  } catch (err) {
+    if (err.status === 401) { KEY = ''; try { localStorage.removeItem(KEY_STORE); sessionStorage.removeItem(KEY_STORE); } catch {} }
+    $('#login').hidden = false;
+    setMsg(err.message, 'err');
+  }
+}
+$('#reload').onclick = () => {
+  if (!dirty) return start(false);
+  confirmTwice($('#reload'), '未保存の変更を捨てて再読み込み', () => start(false));
+};
+
+function normalizeMatches(ms) {
+  return (ms || []).map((m) => ({
+    a: m.a ?? null, b: m.b ?? null,
+    aSongs: [0, 1, 2].map((i) => m.aSongs?.[i] || ''), bSongs: [0, 1, 2].map((i) => m.bSongs?.[i] || ''),
+    aBan: m.aBan ?? -1, aPick: m.aPick ?? -1, bBan: m.bBan ?? -1, bPick: m.bPick ?? -1,
+  }));
+}
+
+$('#saveState').onclick = async () => {
+  readSettingsForm();
+  const btn = $('#saveState'); btn.disabled = true;
+  try {
+    await api('api/admin/state', { method: 'PUT', key: KEY, body: { settings, matches } });
+    dirty = false; $('#dirty').hidden = true;
+    setMsg('保存しました', 'ok');
+  } catch (e) { setMsg(e.message, 'err'); }
+  btn.disabled = false;
+};
+
+// ---------- タブ ----------
+let tab = 'entries';
+$$('[role=tab]').forEach((b) => (b.onclick = () => {
+  tab = b.dataset.tab;
+  $$('[role=tab]').forEach((x) => x.setAttribute('aria-selected', x === b));
+  $$('[data-pane]').forEach((p) => (p.hidden = p.dataset.pane !== tab));
+  if (tab === 'images') renderImage();
+}));
+
+function renderAll() {
+  renderEntries();
+  renderSettingsForm();
+  renderMatches();
+  if (tab === 'images') renderImage();
+}
+
+// ---------- 参加者 ----------
+let sortKey = 'id', sortDir = 1, editing = null;
+const COLS = [
+  ['id', 'No.', 'num'], ['entry_name', 'エントリー名'], ['x_id', 'X'], ['rating', 'レート', 'num'],
+  ['frate', '2fRATE', 'num'], ['created_at', '申請日時'], ['memo', 'メモ'],
+];
+const entryById = (id) => entries.find((e) => e.id === id);
+const fmtTime = (s) => {
+  const d = new Date(s.replace(' ', 'T') + 'Z');
+  return Number.isNaN(+d) ? s : d.toLocaleString('ja-JP', { timeZone: 'Asia/Tokyo', month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+};
+
+function renderEntries() {
+  $('#entryCount').textContent = `（${entries.length}人）`;
+  const rows = [...entries].sort((x, y) => {
+    const a = x[sortKey], b = y[sortKey];
+    return (typeof a === 'number' ? a - b : String(a).localeCompare(String(b), 'ja')) * sortDir;
+  });
+  const head = '<tr>' + COLS.map(([k, t, c]) => `<th class="${c || ''}"><button type="button" data-sort="${k}">${t}${sortKey === k ? (sortDir > 0 ? ' ▲' : ' ▼') : ''}</button></th>`).join('') + '<th></th></tr>';
+  const body = rows.map((e) => {
+    if (editing === e.id) {
+      return `<tr data-id="${e.id}"><td class="num">${e.id}</td>
+        <td><input id="ed-name" value="${esc(e.entry_name)}" maxlength="20"></td>
+        <td><input id="ed-x" value="${esc(e.x_id)}" maxlength="15"></td>
+        <td><input id="ed-rating" type="number" value="${e.rating}" style="width:7em"></td>
+        <td><input id="ed-frate" type="number" step="0.001" value="${e.frate}" style="width:7em"></td>
+        <td>${esc(fmtTime(e.created_at))}</td>
+        <td><input id="ed-memo" value="${esc(e.memo)}" maxlength="200"></td>
+        <td><div class="btns"><button type="button" class="primary" data-act="save">保存</button><button type="button" class="ghost" data-act="cancel">やめる</button></div></td></tr>`;
+    }
+    return `<tr data-id="${e.id}"><td class="num">${e.id}</td><td>${esc(e.entry_name)}</td>
+      <td><a href="https://x.com/${encodeURIComponent(e.x_id)}" target="_blank" rel="noopener">@${esc(e.x_id)}</a></td>
+      <td class="num">${e.rating}</td><td class="num">${Number(e.frate).toFixed(3)}</td>
+      <td>${esc(fmtTime(e.created_at))}</td><td>${esc(e.memo)}</td>
+      <td><div class="btns"><button type="button" data-act="edit">編集</button><button type="button" class="danger" data-act="del">削除</button></div></td></tr>`;
+  }).join('');
+  $('#entryTable').innerHTML = `<thead>${head}</thead><tbody>${body || '<tr><td colspan="8" class="note">まだ申請はありません</td></tr>'}</tbody>`;
+}
+
+$('#entryTable').addEventListener('click', async (ev) => {
+  const s = ev.target.closest('[data-sort]');
+  if (s) { const k = s.dataset.sort; sortDir = sortKey === k ? -sortDir : 1; sortKey = k; return renderEntries(); }
+  const b = ev.target.closest('[data-act]'); if (!b) return;
+  const id = +b.closest('tr').dataset.id, act = b.dataset.act;
+  if (act === 'edit') { editing = id; return renderEntries(); }
+  if (act === 'cancel') { editing = null; return renderEntries(); }
+  if (act === 'save') {
+    const body = { entryName: $('#ed-name').value, xId: $('#ed-x').value, rating: Number($('#ed-rating').value), frate: Number($('#ed-frate').value), memo: $('#ed-memo').value };
+    try {
+      await api('api/admin/entries/' + id, { method: 'PUT', key: KEY, body });
+      Object.assign(entryById(id), { entry_name: body.entryName.trim(), x_id: body.xId.trim().replace(/^@/, ''), rating: body.rating, frate: body.frate, memo: body.memo });
+      editing = null; renderEntries(); renderMatches(); setMsg('参加者を更新しました', 'ok');
+    } catch (e) { setMsg(e.message, 'err'); }
+    return;
+  }
+  if (act === 'del') {
+    confirmTwice(b, 'もう一度押すと削除', async () => {
+      try {
+        await api('api/admin/entries/' + id, { method: 'DELETE', key: KEY });
+        entries = entries.filter((e) => e.id !== id);
+        renderEntries(); renderMatches(); setMsg('参加者を削除しました', 'ok');
+      } catch (e) { setMsg(e.message, 'err'); }
+    });
+  }
+});
+
+$('#csv').onclick = () => {
+  const q = (v) => `"${String(v ?? '').replace(/"/g, '""')}"`;
+  const lines = [['No.', 'エントリー名', 'X', 'レート', '2fRATE', '申請日時', 'メモ'].map(q).join(',')]
+    .concat(entries.map((e) => [e.id, e.entry_name, '@' + e.x_id, e.rating, e.frate, fmtTime(e.created_at), e.memo].map(q).join(',')));
+  const blob = new Blob(['﻿' + lines.join('\r\n')], { type: 'text/csv' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob); a.download = 'mogucup_entries.csv'; a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+};
+
+// ---------- 譜面検索 ----------
+const inRange = (c) => c >= (Number(settings.constMin) || 0) - 1e-9 && c <= Number(settings.constCap) + 1e-9;
+function chartText(ch) { return ch ? `${ch.name}［${ch.kind}］${DIFF_SHORT[ch.diff]} ${fmtConst(ch.c)}` : ''; }
+function chosenHTML(key, checkRange) {
+  if (!key) return '';
+  if (!charts) return esc(key);
+  const ch = charts.byKey.get(key);
+  if (!ch) return `<span class="over">譜面データにない譜面です：${esc(key)}</span>`;
+  const over = checkRange && !inRange(ch.c);
+  return `<span class="${over ? 'over' : ''}"><span class="d" style="color:${DIFF_COLOR[ch.diff]}">${ch.diff}</span> ${ch.kind} Lv.${ch.lv}（${fmtConst(ch.c)}）${over ? '　定数が範囲外です' : ''}${ch.img ? '' : '　ジャケットなし'}</span>`;
+}
+
+// value: 譜面キー、onChange(key)、checkRange: 定数の範囲で絞り込むか
+function makePicker({ id, value, onChange, checkRange, placeholder }) {
+  const wrap = document.createElement('div');
+  wrap.className = 'picker';
+  const cur = value && charts?.byKey.get(value);
+  wrap.innerHTML = `<input type="text" id="${id}" autocomplete="off" placeholder="${placeholder || '曲名で検索'}" value="${esc(cur ? cur.name : value || '')}" aria-autocomplete="list">
+    <div class="list" hidden role="listbox"></div><div class="chosen">${chosenHTML(value, checkRange)}</div>`;
+  const input = wrap.querySelector('input'), list = wrap.querySelector('.list');
+  let hits = [], on = -1;
+  const show = () => {
+    if (!charts) { list.innerHTML = '<div class="empty">譜面データを読み込み中です</div>'; list.hidden = false; return; }
+    const q = norm(input.value);
+    const num = /^\d+(\.\d)?\+?$/.test(input.value.trim()) ? input.value.trim() : null;
+    hits = charts.list.filter((c) => (!checkRange || inRange(c.c)) &&
+      (num ? (num.endsWith('+') || !num.includes('.') ? c.lv === num : fmtConst(c.c) === num) : !q || norm(c.name).includes(q))).slice(0, 50);
+    on = hits.length ? 0 : -1;
+    list.innerHTML = hits.length
+      ? hits.map((c, i) => `<button type="button" role="option" data-i="${i}" class="${i === on ? 'on' : ''}"><span>${esc(c.name)}</span><span class="meta"><span style="color:${DIFF_COLOR[c.diff]}">${DIFF_SHORT[c.diff]}</span> ${c.kind} ${fmtConst(c.c)}</span></button>`).join('')
+      : `<div class="empty">見つかりません${checkRange ? '（定数の範囲内だけを表示しています）' : ''}</div>`;
+    list.hidden = false;
+  };
+  const choose = (c) => { list.hidden = true; input.value = c ? c.name : ''; onChange(c ? c.key : ''); };
+  input.addEventListener('focus', show);
+  input.addEventListener('input', () => { show(); if (!input.value) onChange(''); });
+  input.addEventListener('keydown', (e) => {
+    if (list.hidden) return;
+    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+      e.preventDefault(); if (!hits.length) return;
+      on = (on + (e.key === 'ArrowDown' ? 1 : -1) + hits.length) % hits.length;
+      $$('button', list).forEach((b, i) => b.classList.toggle('on', i === on));
+      $$('button', list)[on].scrollIntoView({ block: 'nearest' });
+    } else if (e.key === 'Enter') { e.preventDefault(); if (on >= 0) choose(hits[on]); }
+    else if (e.key === 'Escape') list.hidden = true;
+  });
+  list.addEventListener('mousedown', (e) => e.preventDefault());
+  list.addEventListener('click', (e) => { const b = e.target.closest('button'); if (b) choose(hits[+b.dataset.i]); });
+  input.addEventListener('blur', () => { list.hidden = true; const c = value && charts?.byKey.get(value); if (c && input.value !== c.name && input.value) input.value = c.name; });
+  return wrap;
+}
+
+// ---------- 大会設定 ----------
+function renderSettingsForm() {
+  const s = settings;
+  $('#sTitle').value = s.title; $('#sRound').value = s.round; $('#sOpen').checked = !!s.entryOpen;
+  $('#sDeadline').value = s.entryDeadline || ''; $('#sNotice').value = s.notice || '';
+  $('#sMin').value = s.constMin || 0; $('#sCap').value = s.constCap;
+  $('#nPair').value = s.notes.pair; $('#nReveal').value = s.notes.reveal; $('#nFinal').value = s.notes.final;
+  $('#kadaiPicker').replaceChildren(makePicker({ id: 'kadai', value: s.kadai, checkRange: false, placeholder: '課題曲を曲名で検索',
+    onChange: (k) => { settings.kadai = k; markDirty(); renderSettingsForm(); } }));
+  updateCapInfo();
+}
+function readSettingsForm() {
+  if (!settings) return;
+  Object.assign(settings, {
+    title: $('#sTitle').value.trim(), round: $('#sRound').value.trim(), entryOpen: $('#sOpen').checked,
+    entryDeadline: $('#sDeadline').value, notice: $('#sNotice').value.trim(),
+    constMin: Number($('#sMin').value) || 0, constCap: Number($('#sCap').value) || 15,
+  });
+  settings.notes = { pair: $('#nPair').value, reveal: $('#nReveal').value, final: $('#nFinal').value };
+}
+function updateCapInfo() {
+  if (!charts) { $('#capInfo').textContent = ''; return; }
+  const n = charts.list.filter((c) => inRange(c.c)).length;
+  $('#capInfo').textContent = `この範囲で選べる譜面は ${n} 譜面です。`;
+}
+$('[data-pane=settings]').addEventListener('input', (e) => {
+  if (e.target.closest('.picker')) return;
+  readSettingsForm(); markDirty(); updateCapInfo();
+  if (e.target.id === 'sMin' || e.target.id === 'sCap') renderMatches();
+});
+
+// ---------- 組み合わせ・選曲 ----------
+const nameOf = (id, fb) => entryById(id)?.entry_name || fb;
+const emptyMatch = (a = null, b = null) => ({ a, b, aSongs: ['', '', ''], bSongs: ['', '', ''], aBan: -1, aPick: -1, bBan: -1, bPick: -1 });
+
+function entryOptions(sel) {
+  return '<option value="">（未設定）</option>' + entries.map((e) => `<option value="${e.id}"${e.id === sel ? ' selected' : ''}>${esc(e.entry_name)}（2fRATE ${Number(e.frate).toFixed(3)}）</option>`).join('');
+}
+
+function renderMatches() {
+  const list = $('#matchList');
+  list.replaceChildren();
+  matches.forEach((m, mi) => {
+    const art = document.createElement('article');
+    art.className = 'match';
+    art.innerHTML = `<header><b>MATCH ${String(mi + 1).padStart(2, '0')}</b>
+      <div class="btns"><button type="button" class="danger" data-del="${mi}">この対戦カードを削除</button></div></header>
+      <div class="sides"></div><p class="warn" hidden></p>`;
+    const sides = $('.sides', art);
+    ['a', 'b'].forEach((sd) => {
+      const opp = sd === 'a' ? 'b' : 'a';
+      const div = document.createElement('div');
+      div.className = 'side';
+      div.innerHTML = `<label>${sd === 'a' ? 'プレイヤーA' : 'プレイヤーB'}<select id="m${mi}${sd}p" data-m="${mi}" data-sd="${sd}">${entryOptions(m[sd])}</select></label>`;
+      m[sd + 'Songs'].forEach((key, i) => {
+        const slot = document.createElement('div');
+        slot.className = 'slot' + (m[sd + 'Ban'] === i ? ' ban' : '') + (m[sd + 'Pick'] === i ? ' pick' : '');
+        slot.innerHTML = `<span class="n">${i + 1}</span>`;
+        slot.append(makePicker({ id: `m${mi}${sd}s${i}`, value: key, checkRange: true, placeholder: `自選曲${i + 1}を曲名・定数で検索`,
+          onChange: (k) => { m[sd + 'Songs'][i] = k; markDirty(); renderMatches(); } }));
+        div.append(slot);
+      });
+      const radios = (f, title) => `<div class="radios"><span>${title}</span>${[0, 1, 2].map((i) =>
+        `<label><input type="radio" name="m${mi}${sd}${f}" data-m="${mi}" data-f="${sd}${f}" value="${i}"${m[sd + f] === i ? ' checked' : ''}${f === 'Pick' && m[sd + 'Ban'] === i ? ' disabled' : ''}>${i + 1}</label>`).join('')}
+        <label><input type="radio" name="m${mi}${sd}${f}" data-m="${mi}" data-f="${sd}${f}" value="-1"${m[sd + f] === -1 ? ' checked' : ''}>未定</label></div>`;
+      div.insertAdjacentHTML('beforeend', radios('Ban', esc(nameOf(m[opp], '相手')) + ' がBAN') + radios('Pick', '自選曲に決定'));
+      sides.append(div);
+    });
+    const w = matchWarnings(m);
+    if (w.length) { const p = $('.warn', art); p.hidden = false; p.textContent = w.join(' / '); }
+    list.append(art);
+  });
+  if (!matches.length) list.innerHTML = '<p class="note">対戦カードはまだありません。上のボタンでペアを作るか、対戦カードを追加してください。</p>';
+  // 全体の確認
+  const used = matches.flatMap((m) => [m.a, m.b]).filter((x) => x != null);
+  const dupIds = [...new Set(used.filter((x, i) => used.indexOf(x) !== i))];
+  const unpaired = entries.filter((e) => !used.includes(e.id));
+  const msgs = [];
+  if (dupIds.length) msgs.push('複数の対戦カードに入っている人：' + dupIds.map((id) => nameOf(id, '?')).join('、'));
+  if (unpaired.length && matches.length) msgs.push('対戦カードに入っていない人：' + unpaired.map((e) => e.entry_name).join('、'));
+  $('#pairWarn').hidden = !msgs.length; $('#pairWarn').textContent = msgs.join(' / ');
+}
+
+function matchWarnings(m) {
+  const w = [];
+  if (m.a != null && m.a === m.b) w.push('同じ人どうしの対戦になっています');
+  ['a', 'b'].forEach((sd) => {
+    const name = nameOf(m[sd], sd === 'a' ? 'プレイヤーA' : 'プレイヤーB');
+    const ks = m[sd + 'Songs'].filter(Boolean);
+    if (new Set(ks).size !== ks.length) w.push(`${name} の自選曲に同じ譜面があります`);
+    if (charts && ks.some((k) => { const c = charts.byKey.get(k); return c && !inRange(c.c); })) w.push(`${name} の自選曲に定数の範囲外の譜面があります`);
+    if (settings.kadai && ks.includes(settings.kadai)) w.push(`${name} の自選曲が運営課題曲と同じです`);
+  });
+  return w;
+}
+
+$('#matchList').addEventListener('change', (e) => {
+  const t = e.target, mi = t.dataset.m;
+  if (mi === undefined) return;
+  const m = matches[+mi];
+  if (t.tagName === 'SELECT') m[t.dataset.sd] = t.value ? +t.value : null;
+  else if (t.type === 'radio') {
+    const f = t.dataset.f, v = +t.value;
+    m[f] = v;
+    if (f.endsWith('Ban') && m[f[0] + 'Pick'] === v && v !== -1) m[f[0] + 'Pick'] = -1;
+  }
+  markDirty(); renderMatches();
+});
+$('#matchList').addEventListener('click', (e) => {
+  const b = e.target.closest('[data-del]'); if (!b) return;
+  confirmTwice(b, 'もう一度押すと削除', () => { matches.splice(+b.dataset.del, 1); markDirty(); renderMatches(); });
+});
+$('#addMatch').onclick = () => { matches.push(emptyMatch()); markDirty(); renderMatches(); };
+
+function makePairs(order) {
+  const ms = [];
+  for (let i = 0; i < order.length; i += 2) ms.push(emptyMatch(order[i].id, order[i + 1]?.id ?? null));
+  matches = ms; markDirty(); renderMatches();
+  setMsg(`${ms.length} 試合の対戦カードを作りました${order.length % 2 ? '（奇数のため最後の1人は相手が未設定です）' : ''}`, 'ok');
+}
+const pairAction = (btn, fn) => () => (matches.length ? confirmTwice(btn, 'もう一度押すと作り直す', fn) : fn());
+$('#pairFrate').onclick = pairAction($('#pairFrate'), () => makePairs([...entries].sort((x, y) => y.frate - x.frate)));
+$('#pairRandom').onclick = pairAction($('#pairRandom'), () => {
+  const a = [...entries];
+  for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; }
+  makePairs(a);
+});
+
+// ---------- 告知画像 ----------
+let kind = 'pair', imgIdx = 0;
+function viewModel() {
+  readSettingsForm();
+  const ch = (k) => (k && charts?.byKey.get(k)) || null;
+  return {
+    title: settings.title, round: settings.round, notes: settings.notes, kadai: ch(settings.kadai),
+    matches: matches.map((m) => ({
+      aName: nameOf(m.a, 'プレイヤーA'), bName: nameOf(m.b, 'プレイヤーB'),
+      aSongs: m.aSongs.map(ch), bSongs: m.bSongs.map(ch),
+      aBan: m.aBan, aPick: m.aPick, bBan: m.bBan, bPick: m.bPick,
+    })),
+  };
+}
+let renderSeq = 0;
+async function renderImage() {
+  const per = kind !== 'pair';
+  $('#imgMatchWrap').hidden = !per;
+  $('#dlAll').hidden = !per || matches.length < 2;
+  imgIdx = Math.min(imgIdx, Math.max(0, matches.length - 1));
+  $('#imgMatch').innerHTML = matches.map((m, i) => `<option value="${i}"${i === imgIdx ? ' selected' : ''}>MATCH ${String(i + 1).padStart(2, '0')}　${esc(nameOf(m.a, 'A'))} vs ${esc(nameOf(m.b, 'B'))}</option>`).join('');
+  const seq = ++renderSeq;
+  await DrawKit.render($('#cv'), viewModel(), kind, imgIdx);
+  if (seq !== renderSeq) return;
+  try {
+    $('#out').src = $('#cv').toDataURL('image/png');
+    $('#imgNote').textContent = '';
+  } catch {
+    $('#imgNote').textContent = 'ジャケット画像の読み込みに問題があり、画像を書き出せませんでした';
+  }
+}
+$('#kindTabs').addEventListener('click', (e) => {
+  const b = e.target.closest('[data-kind]'); if (!b) return;
+  kind = b.dataset.kind;
+  $$('#kindTabs button').forEach((x) => x.setAttribute('aria-selected', x === b));
+  renderImage();
+});
+$('#imgMatch').onchange = (e) => { imgIdx = +e.target.value; renderImage(); };
+
+const KIND_NAME = { pair: '組み合わせ', reveal: '選曲公開', final: '対戦曲' };
+const fileName = (k, i) => `${(settings.round || 'mogucup').replace(/[\\/:*?"<>|\s]/g, '_')}_${KIND_NAME[k]}${k === 'pair' ? '' : '_M' + String(i + 1).padStart(2, '0')}.png`;
+async function download(k, i) {
+  await DrawKit.render($('#cv'), viewModel(), k, i);
+  const blob = await new Promise((r) => $('#cv').toBlob(r, 'image/png'));
+  if (!blob) throw new Error('画像を書き出せませんでした');
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob); a.download = fileName(k, i); a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+}
+$('#dlOne').onclick = async () => { try { await download(kind, imgIdx); } catch (e) { setMsg(e.message, 'err'); } renderImage(); };
+$('#dlAll').onclick = async () => {
+  try {
+    for (let i = 0; i < matches.length; i++) { await download(kind, i); await new Promise((r) => setTimeout(r, 300)); }
+    setMsg(`${matches.length} 枚保存しました`, 'ok');
+  } catch (e) { setMsg(e.message, 'err'); }
+  renderImage();
+};
+
+if (KEY) start(false);

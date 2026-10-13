@@ -1,0 +1,158 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex">
+<title>もぐらたたきカップ 運営</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=M+PLUS+Rounded+1c:wght@500;800&family=Zen+Kaku+Gothic+New:wght@400;700&family=JetBrains+Mono:wght@500&display=swap">
+<link rel="stylesheet" href="common.css">
+<style>
+main{max-width:1280px;margin:0 auto;display:grid;gap:16px}
+.top{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:8px 16px}
+.tabs{display:flex;flex-wrap:wrap;gap:4px}
+.tabs button[aria-selected="true"]{background:var(--accent);color:var(--accent-fg);border-color:var(--accent)}
+.savebar{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.dirty{font-size:13px;color:var(--accent)}
+/* 参加者一覧 */
+.tablewrap{overflow-x:auto}
+table{border-collapse:collapse;width:100%;font-size:14px}
+th,td{padding:6px 8px;border-bottom:1px solid var(--line);text-align:left;white-space:nowrap}
+th button{all:unset;cursor:pointer;color:var(--muted);font-size:12px}
+th button:focus-visible{outline:2px solid var(--accent)}
+td.num,th.num{text-align:right}
+td input{padding:3px 6px;font-size:14px}
+/* 組み合わせ */
+.match{border:1px solid var(--line);border-radius:8px;padding:12px;display:grid;gap:10px}
+.match>header{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:8px}
+.match>header b{font-family:var(--f-mono)}
+.sides{display:grid;grid-template-columns:repeat(auto-fit,minmax(340px,1fr));gap:12px}
+.side{display:grid;gap:8px;min-width:0}
+.slot{display:grid;grid-template-columns:1.4em minmax(0,1fr);gap:6px;align-items:start}
+.slot .n{font-family:var(--f-mono);color:var(--muted);font-size:12px;padding-top:9px;text-align:center}
+.slot.ban .chosen{text-decoration:line-through;opacity:.55}
+.slot.pick .picker input{border-color:var(--accent)}
+.radios{display:flex;flex-wrap:wrap;gap:4px 12px;font-size:13px;color:var(--muted)}
+.radios label{display:flex;gap:4px;align-items:center}
+.warn{color:var(--danger);font-size:13px;margin:0}
+/* 譜面検索 */
+.picker{position:relative;display:grid;gap:2px}
+.picker .list{position:absolute;z-index:5;top:100%;left:0;right:0;max-height:300px;overflow:auto;background:var(--panel);border:1px solid var(--line);border-radius:6px;box-shadow:0 6px 20px rgba(0,0,0,.18);margin-top:2px}
+.picker .list button{all:unset;box-sizing:border-box;display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;width:100%;padding:6px 10px;cursor:pointer;font-size:14px}
+.picker .list button:hover,.picker .list button.on{background:var(--soft)}
+.picker .list .meta{font-family:var(--f-mono);font-size:12px;color:var(--muted)}
+.picker .list .empty{padding:8px 10px;color:var(--muted);font-size:13px}
+.chosen{font-size:12px;color:var(--muted);font-family:var(--f-mono);overflow-wrap:anywhere}
+.chosen .d{font-weight:700}
+.chosen.over{color:var(--danger)}
+/* 告知画像 */
+.imggrid{display:grid;grid-template-columns:minmax(0,1fr);gap:12px}
+.canvasbox{border:1px solid var(--line);border-radius:8px;overflow:hidden;background:var(--soft)}
+.canvasbox img{display:block;width:100%;height:auto}
+#login{max-width:420px}
+</style>
+</head>
+<body>
+<main>
+  <div class="top">
+    <h1>もぐらたたきカップ 運営</h1>
+    <div class="savebar" id="savebar" hidden>
+      <span class="dirty" id="dirty" hidden>未保存の変更があります</span>
+      <button class="primary" id="saveState" type="button">設定と組み合わせを保存</button>
+      <button class="ghost" id="reload" type="button">再読み込み</button>
+      <button class="ghost" id="logout" type="button">ログアウト</button>
+    </div>
+  </div>
+  <p class="msg" id="msg" role="status" aria-live="polite"></p>
+
+  <form class="panel" id="login">
+    <h2>ログイン</h2>
+    <label>管理者用の鍵<input id="key" type="password" autocomplete="current-password"></label>
+    <label style="display:flex;gap:6px;align-items:center"><input id="remember" type="checkbox">このブラウザに鍵を記憶する</label>
+    <div class="btns"><button class="primary" type="submit">ログイン</button></div>
+  </form>
+
+  <div id="app" hidden style="display:grid;gap:16px">
+    <div class="tabs" role="tablist">
+      <button type="button" role="tab" data-tab="entries" aria-selected="true">参加者</button>
+      <button type="button" role="tab" data-tab="settings" aria-selected="false">大会設定</button>
+      <button type="button" role="tab" data-tab="matches" aria-selected="false">組み合わせ・選曲</button>
+      <button type="button" role="tab" data-tab="images" aria-selected="false">告知画像</button>
+    </div>
+
+    <section class="panel" data-pane="entries">
+      <div class="btns" style="justify-content:space-between">
+        <h2 style="margin:0">参加者 <span id="entryCount" class="num"></span></h2>
+        <div class="btns">
+          <button type="button" id="csv">CSVで書き出す</button>
+        </div>
+      </div>
+      <div class="tablewrap"><table id="entryTable"></table></div>
+      <p class="note">行の「編集」で内容を直せます。削除は2回押すと確定します。</p>
+    </section>
+
+    <section class="panel" data-pane="settings" hidden>
+      <h2>大会設定</h2>
+      <div class="row">
+        <label>大会名<input id="sTitle" type="text"></label>
+        <label>ラウンド名<input id="sRound" type="text"></label>
+      </div>
+      <div class="row">
+        <label style="display:flex;gap:6px;align-items:center;align-self:end;color:var(--fg)"><input id="sOpen" type="checkbox">参加申請を受け付ける</label>
+        <label>申請の締切（日本時間、空欄で期限なし）<input id="sDeadline" type="datetime-local"></label>
+      </div>
+      <label>申請ページのお知らせ<textarea id="sNotice" rows="2"></textarea></label>
+      <h2>自選曲の譜面定数</h2>
+      <div class="row">
+        <label>下限（0 で下限なし）<input id="sMin" type="number" step="0.1" min="0" max="15"></label>
+        <label>上限<input id="sCap" type="number" step="0.1" min="1" max="15"></label>
+      </div>
+      <p class="note" id="capInfo"></p>
+      <h2>運営課題曲</h2>
+      <div id="kadaiPicker"></div>
+      <h2>告知画像の下に入れる一言</h2>
+      <label>組み合わせ発表<input id="nPair" type="text"></label>
+      <label>選曲公開<input id="nReveal" type="text"></label>
+      <label>BAN結果・対戦曲<input id="nFinal" type="text"></label>
+    </section>
+
+    <section class="panel" data-pane="matches" hidden>
+      <div class="btns" style="justify-content:space-between">
+        <h2 style="margin:0">組み合わせ・選曲</h2>
+        <div class="btns">
+          <button type="button" id="pairFrate">2fRATE順にペアを作る</button>
+          <button type="button" id="pairRandom">ランダムにペアを作る</button>
+          <button type="button" id="addMatch">対戦カードを追加</button>
+        </div>
+      </div>
+      <p class="note">ペアを作り直すと、入力済みの選曲は消えます（2回押すと確定）。自選曲は譜面定数の上限・下限の範囲から検索できます。</p>
+      <p class="warn" id="pairWarn" hidden></p>
+      <div id="matchList" style="display:grid;gap:12px"></div>
+    </section>
+
+    <section class="panel" data-pane="images" hidden>
+      <div class="btns">
+        <div class="tabs" role="group" aria-label="画像の種類" id="kindTabs">
+          <button type="button" data-kind="pair" aria-selected="true">組み合わせ発表</button>
+          <button type="button" data-kind="reveal" aria-selected="false">選曲公開</button>
+          <button type="button" data-kind="final" aria-selected="false">BAN結果・対戦曲</button>
+        </div>
+        <label id="imgMatchWrap" hidden style="min-width:240px">対象の試合<select id="imgMatch"></select></label>
+      </div>
+      <div class="canvasbox"><img id="out" alt="生成された告知画像"></div>
+      <div class="btns">
+        <button class="primary" id="dlOne" type="button">この画像を保存</button>
+        <button id="dlAll" type="button" hidden>全試合ぶん保存</button>
+        <span class="note" id="imgNote"></span>
+      </div>
+    </section>
+  </div>
+</main>
+<canvas id="cv" hidden></canvas>
+
+<script src="config.js"></script>
+<script src="common.js"></script>
+<script src="draw.js"></script>
+<script src="admin.js"></script>
+</body>
+</html>
