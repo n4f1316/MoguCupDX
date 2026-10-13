@@ -342,7 +342,7 @@ let curDiv = DIVISIONS[0].id;
 const nameOf = (id, fb) => entryById(id)?.entry_name || fb;
 const divEntries = (div) => entries.filter((e) => inDiv(e, div));
 const divMatches = (div = curDiv) => matches.filter((m) => m.div === div);
-// らいむ部門で両者が Q10 に「はい」と答えていれば、Lv14 を解禁する
+// らいむ部門で両者が Q11（Lv14）に「はい」と答えていれば、Lv14 を解禁する
 const wantsLv14 = (id) => !!entryById(id)?.answers?.lime?.lv14;
 const autoLv14 = (div, a, b) => div === 'lime' && a != null && b != null && wantsLv14(a) && wantsLv14(b);
 const emptyMatch = (div, a = null, b = null) => {

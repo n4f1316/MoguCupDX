@@ -68,6 +68,11 @@ $('#logout').onclick = async () => {
 // ---------- 参加申請 ----------
 $('#divChecks').innerHTML = DIVISIONS.map((d) => `<label><input type="checkbox" name="div" value="${d.id}">${d.name}</label>`).join('');
 $('#plateChecks').innerHTML = PLATES.map((p) => `<label><input type="checkbox" name="plate" value="${p}">${p}神</label>`).join('');
+// 神プレート：1つのボタンで全選択／全解除（すべて選ばれているときは「すべて解除」）
+const plateBoxes = () => [...document.querySelectorAll('input[name=plate]')];
+const syncPlateAll = () => { $('#plateAll').textContent = plateBoxes().every((x) => x.checked) ? 'すべて解除' : 'すべて選択'; };
+$('#plateAll').onclick = () => { const all = plateBoxes().every((x) => x.checked); plateBoxes().forEach((x) => (x.checked = !all)); syncPlateAll(); };
+$('#plateChecks').addEventListener('change', syncPlateAll);
 const checkedDivs = () => [...document.querySelectorAll('input[name=div]:checked')].map((x) => x.value);
 $('#divChecks').addEventListener('change', () => {
   const d = checkedDivs();
@@ -96,12 +101,12 @@ $('#entryForm').addEventListener('submit', async (e) => {
   if (need(v.answers.discord, 'Q2：Discord で使用している名前を入力してください')) return;
   if (need(v.entryName, 'Q3：スコアタで使用する名前を入力してください')) return;
   if (need(divisions.length, 'Q4：参加したい部門を1つ以上選んでください')) return;
-  if (need($('#rating').value !== '' && Number.isInteger(v.rating), 'Q5：レートを整数で入力してください')) return;
-  if (need($('#frate').value !== '' && Number.isFinite(v.frate), '2fRATE を入力してください')) return;
+  if (need($('#rating').value !== '' && Number.isInteger(v.rating), 'Q5：現在のレートを整数で入力してください')) return;
+  if (need($('#frate').value !== '' && Number.isFinite(v.frate), 'Q6：2fRATE を入力してください')) return;
   const l = v.answers.lime, m = v.answers.lemon;
-  if (l && need(isCount(l.m5) && isCount(l.r5) && isCount(l.s6), '【らいむ部門】Q7〜Q9 を0以上の整数で入力してください')) return;
-  if (l && need(l.lv14 !== null, '【らいむ部門】Q10 を選んでください')) return;
-  if (m && need(isCount(m.ap14) && isCount(m.ap14p), '【れもん部門】Q11・Q12 を0以上の整数で入力してください')) return;
+  if (l && need(isCount(l.m5) && isCount(l.r5) && isCount(l.s6), '【らいむ部門】Q8〜Q10 を0以上の整数で入力してください')) return;
+  if (l && need(l.lv14 !== null, '【らいむ部門】Q11 を選んでください')) return;
+  if (m && need(isCount(m.ap14) && isCount(m.ap14p), '【れもん部門】Q12・Q13 を0以上の整数で入力してください')) return;
   if (v.website) return;
   const btn = $('#entryForm button[type=submit]'); btn.disabled = true;
   try {

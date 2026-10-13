@@ -6,7 +6,7 @@
 <meta name="robots" content="noindex">
 <title>もぐらたたきカップ 運営</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=M+PLUS+Rounded+1c:wght@500;800&family=Zen+Kaku+Gothic+New:wght@400;700&family=JetBrains+Mono:wght@500&display=swap">
-<link rel="stylesheet" href="common.css?v=20261014c">
+<link rel="stylesheet" href="common.css?v=20261014d">
 <style>
 main{max-width:1280px;margin:0 auto;display:grid;gap:16px}
 .top{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:8px 16px}
@@ -139,7 +139,7 @@ td input{padding:3px 6px;font-size:14px}
           <button type="button" id="applyDefaults">既定の上限・課題曲をこの部門の全試合に入れる</button>
         </div>
       </div>
-      <p class="note">部門を選んでから操作します。ペアはその部門に申請した人だけで作ります。らいむ部門では、両者が Q10 に「はい」と答えた試合は自動で Lv14 解禁になります。ペアを作り直すと、それまでの選曲は使われなくなります（2回押すと確定）。参加者が提出した選曲はここに表示され、運営が代わりに入力・修正することもできます。</p>
+      <p class="note">部門を選んでから操作します。ペアはその部門に申請した人だけで作ります。らいむ部門では、両者が Q11（Lv14）に「はい」と答えた試合は自動で Lv14 解禁になります。ペアを作り直すと、それまでの選曲は使われなくなります（2回押すと確定）。参加者が提出した選曲はここに表示され、運営が代わりに入力・修正することもできます。</p>
       <p class="warn" id="pairWarn" hidden></p>
       <div id="matchList" style="display:grid;gap:12px"></div>
     </section>
@@ -165,9 +165,9 @@ td input{padding:3px 6px;font-size:14px}
 </main>
 <canvas id="cv" hidden></canvas>
 
-<script src="config.js?v=20261014c"></script>
-<script src="common.js?v=20261014c"></script>
-<script src="draw.js?v=20261014c"></script>
-<script src="admin.js?v=20261014c"></script>
+<script src="config.js?v=20261014d"></script>
+<script src="common.js?v=20261014d"></script>
+<script src="draw.js?v=20261014d"></script>
+<script src="admin.js?v=20261014d"></script>
 </body>
 </html>

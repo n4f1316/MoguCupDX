@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>もぐらたたきカップ</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=M+PLUS+Rounded+1c:wght@500;800&family=Zen+Kaku+Gothic+New:wght@400;700&family=JetBrains+Mono:wght@500&display=swap">
-<link rel="stylesheet" href="common.css?v=20261014c">
+<link rel="stylesheet" href="common.css?v=20261014d">
 <style>
 main{max-width:720px;margin:0 auto;display:grid;gap:16px}
 .hero{display:grid;gap:4px;padding-block:8px}
@@ -135,27 +135,26 @@ fieldset.q legend{padding:0;margin-bottom:4px}
     <fieldset class="q"><legend><b>Q4.</b> あなたが参加したい部門を選択してください（複数選択可） <i>必須</i></legend>
       <div class="checks" id="divChecks"></div>
     </fieldset>
-    <div class="row">
-      <label class="q"><span><b>Q5.</b> あなたの現在のレートを教えてください <i>必須</i></span>
-        <input id="rating" type="number" inputmode="numeric" min="0" max="20000" step="1" placeholder="例 15800">
-      </label>
-      <label class="q"><span>2fRATE（☆7まで） <i>必須</i></span>
-        <input id="frate" type="number" inputmode="decimal" min="0" max="30" step="0.001" placeholder="例 13.452">
-        <small><a href="https://n4f1316.github.io/dxscore-tools/" target="_blank" rel="noopener">2fRATE のページ</a>で確認できます</small>
-      </label>
-    </div>
-    <fieldset class="q"><legend><b>Q6.</b> あなたの神プレートの獲得状況について教えてください</legend>
+    <label class="q"><span><b>Q5.</b> あなたの現在のレートを教えてください <i>必須</i></span>
+      <input id="rating" type="number" inputmode="numeric" min="0" max="20000" step="1" placeholder="例 15800">
+    </label>
+    <label class="q"><span><b>Q6.</b> あなたの 2fRATE（☆7まで）を教えてください <i>必須</i></span>
+      <small><a href="https://n4f1316.github.io/dxscore-tools/" target="_blank" rel="noopener">2fRATE のページ</a>で確認できます。</small>
+      <input id="frate" type="number" inputmode="decimal" min="0" max="30" step="0.001" placeholder="例 13.452">
+    </label>
+    <fieldset class="q"><legend><b>Q7.</b> あなたの神プレートの獲得状況について教えてください</legend>
       <small>回答するのは、14以上の MASTER 譜面が終了しているものにしてください。該当なしの場合は未回答で大丈夫です。</small>
+      <div class="btns"><button type="button" id="plateAll" class="ghost">すべて選択</button></div>
       <div class="checks plates" id="plateChecks"></div>
     </fieldset>
     <div class="divq" id="qLime" hidden>
       <h3>らいむ部門</h3>
       <div class="row">
-        <label class="q"><span><b>Q7.</b> MASTER の星5達成譜面数 <i>必須</i></span><input id="m5" type="number" inputmode="numeric" min="0" step="1"></label>
-        <label class="q"><span><b>Q8.</b> Re:MASTER の星5達成譜面数 <i>必須</i></span><input id="r5" type="number" inputmode="numeric" min="0" step="1"></label>
-        <label class="q"><span><b>Q9.</b> MASTER・Re:MASTER の星6達成合計譜面数 <i>必須</i></span><input id="s6" type="number" inputmode="numeric" min="0" step="1"></label>
+        <label class="q"><span><b>Q8.</b> MASTER の星5達成譜面数 <i>必須</i></span><input id="m5" type="number" inputmode="numeric" min="0" step="1"></label>
+        <label class="q"><span><b>Q9.</b> Re:MASTER の星5達成譜面数 <i>必須</i></span><input id="r5" type="number" inputmode="numeric" min="0" step="1"></label>
+        <label class="q"><span><b>Q10.</b> MASTER・Re:MASTER の星6達成合計譜面数 <i>必須</i></span><input id="s6" type="number" inputmode="numeric" min="0" step="1"></label>
       </div>
-      <fieldset class="q"><legend><b>Q10.</b> 自選曲にレベル14を1曲含められるようにしたいですか？ <i>必須</i></legend>
+      <fieldset class="q"><legend><b>Q11.</b> 自選曲にレベル14を1曲含められるようにしたいですか？ <i>必須</i></legend>
         <small>マッチング決定時に両者が承諾した場合にのみ、レベル14が解禁されます。そのため、承諾した場合でもレベル14を自選曲に含められない可能性があります。</small>
         <div class="checks"><label><input type="radio" name="lv14" value="yes">はい</label><label><input type="radio" name="lv14" value="no">いいえ</label></div>
       </fieldset>
@@ -163,8 +162,8 @@ fieldset.q legend{padding:0;margin-bottom:4px}
     <div class="divq" id="qLemon" hidden>
       <h3>れもん部門</h3>
       <div class="row">
-        <label class="q"><span><b>Q11.</b> レベル14の AP 達成譜面数 <i>必須</i></span><input id="ap14" type="number" inputmode="numeric" min="0" step="1"></label>
-        <label class="q"><span><b>Q12.</b> レベル14+の AP 達成譜面数 <i>必須</i></span><input id="ap14p" type="number" inputmode="numeric" min="0" step="1"></label>
+        <label class="q"><span><b>Q12.</b> レベル14の AP 達成譜面数 <i>必須</i></span><input id="ap14" type="number" inputmode="numeric" min="0" step="1"></label>
+        <label class="q"><span><b>Q13.</b> レベル14+の AP 達成譜面数 <i>必須</i></span><input id="ap14p" type="number" inputmode="numeric" min="0" step="1"></label>
       </div>
     </div>
     <div class="hp" aria-hidden="true"><label>website<input id="website" tabindex="-1" autocomplete="off"></label></div>
@@ -183,8 +182,8 @@ fieldset.q legend{padding:0;margin-bottom:4px}
   <p class="foot">非公式のファンメイドツールです。株式会社セガおよび関連会社とは一切関係ありません。楽曲・ジャケット画像の著作権は、株式会社セガおよび各権利者に帰属します。</p>
 </main>
 
-<script src="config.js?v=20261014c"></script>
-<script src="common.js?v=20261014c"></script>
-<script src="player.js?v=20261014c"></script>
+<script src="config.js?v=20261014d"></script>
+<script src="common.js?v=20261014d"></script>
+<script src="player.js?v=20261014d"></script>
 </body>
 </html>
