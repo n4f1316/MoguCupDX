@@ -159,7 +159,7 @@ function renderMatch() {
   const facts = el('dl', 'facts');
   facts.innerHTML = `<dt>自選曲の上限</dt><dd>譜面定数 <b>${fmtConst(Number(m.cap))}</b> 以下</dd>${m.opponent ? `<dt>相手の X</dt><dd><a href="https://x.com/${encodeURIComponent(m.opponent.xId)}" target="_blank" rel="noopener">@${esc(m.opponent.xId)}</a></dd>` : ''}`;
   box.append(facts);
-  if (m.kadai) { box.append(el('div', 'slotno', '運営課題曲')); box.append(songEl(m.kadai)); }
+  if (m.kadai && phase !== 'done') { box.append(el('div', 'slotno', '運営課題曲')); box.append(songEl(m.kadai)); }
 
   if (phase === 'select') renderSelect(box, m);
   else if (phase === 'ban') renderBan(box, m);
@@ -307,12 +307,12 @@ function renderPick(box, m) {
 // 段階：対戦曲確定
 function renderDone(box, m) {
   box.append(el('h2', '', '対戦曲'));
-  const rows = [
-    ['あなたの自選曲', m.myPick >= 0 ? m.mySongs[m.myPick] : ''],
-    [`${m.opponent?.entryName || '相手'} の自選曲`, m.oppPick >= 0 && m.oppSongs ? m.oppSongs[m.oppPick] : ''],
-    ['運営課題曲', m.kadai],
-  ];
-  rows.forEach(([lab, k]) => { box.append(el('div', 'slotno', lab)); box.append(songEl(k)); });
+  const list = finalSongs({
+    format: ME.settings.format, kadai: m.kadai, kadai2: m.kadai2, aName: 'あなた', bName: m.opponent?.entryName || '相手',
+    aKey: m.myPick >= 0 ? m.mySongs[m.myPick] : '', bKey: m.oppPick >= 0 && m.oppSongs ? m.oppSongs[m.oppPick] : '',
+  });
+  if (list[0].kind === 'both') box.append(el('p', 'note', ME.settings.format === 'mini' ? '両者が同じ曲を自選曲にしました。' : '両者が同じ曲を自選曲にしたため、運営課題曲が2曲になります。'));
+  list.forEach((f) => { box.append(el('div', 'slotno', f.label)); box.append(songEl(f.key)); });
 }
 
 refresh();

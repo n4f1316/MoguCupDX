@@ -69,7 +69,7 @@ function buildMatches(ms, picks) {
   return (ms || []).map((m) => {
     const pa = row(m.id, m.a), pb = row(m.id, m.b);
     return {
-      id: m.id || newId(), a: m.a ?? null, b: m.b ?? null, cap: m.cap ?? settings.defaultCap, kadai: m.kadai || '',
+      id: m.id || newId(), a: m.a ?? null, b: m.b ?? null, cap: m.cap ?? settings.defaultCap, kadai: m.kadai || '', kadai2: m.kadai2 || '',
       aSongs: [0, 1, 2].map((i) => pa.songs[i] || ''), bSongs: [0, 1, 2].map((i) => pb.songs[i] || ''),
       aBan: pb.ban, bBan: pa.ban, aPick: pa.pick, bPick: pb.pick, edited: false,
     };
@@ -80,7 +80,7 @@ $('#saveState').onclick = async () => {
   readSettingsForm();
   const btn = $('#saveState'); btn.disabled = true;
   try {
-    const plain = matches.map(({ id, a, b, cap, kadai }) => ({ id, a, b, cap, kadai }));
+    const plain = matches.map(({ id, a, b, cap, kadai, kadai2 }) => ({ id, a, b, cap, kadai, kadai2 }));
     // 運営が直した試合の選曲だけ送る（参加者がその後に提出した内容を上書きしないため）
     const items = [];
     matches.filter((m) => m.edited).forEach((m) => {
@@ -254,6 +254,7 @@ function makePicker({ id, value, onChange, cap = null, placeholder }) {
 }
 
 // ---------- 大会設定 ----------
+const isMini = () => settings?.format === 'mini';
 const PHASE_LABEL = { closed: '組み合わせ発表前（参加者に対戦カードを見せない）', select: '自選曲の提出', ban: 'BAN', pick: '自選曲の決定', done: '対戦曲確定' };
 function renderSettingsForm() {
   const s = settings;
@@ -263,6 +264,10 @@ function renderSettingsForm() {
   $('#sPhaseNote').value = s.phaseNote || '';
   $('#sDefCap').value = s.defaultCap ?? 14;
   $('#nPair').value = s.notes.pair; $('#nReveal').value = s.notes.reveal; $('#nFinal').value = s.notes.final;
+  $('#sFormat').value = s.format || 'main';
+  $$('.mainOnly').forEach((x) => (x.hidden = isMini()));
+  $('#defKadai2Picker').replaceChildren(makePicker({ id: 'defKadai2', value: s.defaultKadai2 || '', placeholder: '課題曲2を曲名で検索',
+    onChange: (k) => { settings.defaultKadai2 = k; markDirty(); renderSettingsForm(); } }));
   $('#defKadaiPicker').replaceChildren(makePicker({ id: 'defKadai', value: s.defaultKadai || '', placeholder: '課題曲を曲名で検索',
     onChange: (k) => { settings.defaultKadai = k; markDirty(); renderSettingsForm(); } }));
 }
@@ -273,6 +278,7 @@ function readSettingsForm() {
     entryDeadline: $('#sDeadline').value, notice: $('#sNotice').value.trim(),
     phase: $('#sPhase').value || settings.phase, phaseNote: $('#sPhaseNote').value.trim(),
     defaultCap: Number($('#sDefCap').value) || 15,
+    format: $('#sFormat').value || 'main',
   });
   settings.notes = { pair: $('#nPair').value, reveal: $('#nReveal').value, final: $('#nFinal').value };
 }
@@ -281,12 +287,13 @@ $('[data-pane=settings]').addEventListener('input', (e) => {
   readSettingsForm(); markDirty();
 });
 $('[data-pane=settings]').addEventListener('change', (e) => {
+  if (e.target.id === 'sFormat') { readSettingsForm(); markDirty(); renderSettingsForm(); renderMatches(); return; }
   if (e.target.id === 'sPhase') { readSettingsForm(); markDirty(); setMsg('段階を変えました。「設定と組み合わせを保存」を押すと参加者のページに反映されます', 'ok'); }
 });
 
 // ---------- 組み合わせ・選曲 ----------
 const nameOf = (id, fb) => entryById(id)?.entry_name || fb;
-const emptyMatch = (a = null, b = null) => ({ id: newId(), a, b, cap: settings.defaultCap ?? 14, kadai: settings.defaultKadai || '', aSongs: ['', '', ''], bSongs: ['', '', ''], aBan: -1, aPick: -1, bBan: -1, bPick: -1, edited: false });
+const emptyMatch = (a = null, b = null) => ({ id: newId(), a, b, cap: settings.defaultCap ?? 14, kadai: settings.defaultKadai || '', kadai2: settings.defaultKadai2 || '', aSongs: ['', '', ''], bSongs: ['', '', ''], aBan: -1, aPick: -1, bBan: -1, bPick: -1, edited: false });
 
 function entryOptions(sel) {
   return '<option value="">（未設定）</option>' + entries.map((e) => `<option value="${e.id}"${e.id === sel ? ' selected' : ''}>${esc(e.entry_name)}（2fRATE ${Number(e.frate).toFixed(3)}）</option>`).join('');
@@ -307,10 +314,13 @@ function renderMatches() {
     art.innerHTML = `<header><b>MATCH ${String(mi + 1).padStart(2, '0')}</b>
       <div class="btns"><button type="button" class="danger" data-del="${mi}">この対戦カードを削除</button></div></header>
       <div class="row" style="align-items:start"><label>自選曲の上限（譜面定数）<input type="number" step="0.1" min="1" max="15" id="m${mi}cap" data-m="${mi}" data-f="cap" value="${m.cap}"></label>
-      <div><label for="m${mi}kadai">運営課題曲</label><div class="kadai"></div></div></div>
+      <div${isMini() ? ' hidden' : ''}><label for="m${mi}kadai">運営課題曲</label><div class="kadai"></div></div>
+      <div${isMini() ? ' hidden' : ''}><label for="m${mi}kadai2">運営課題曲2（両者が同じ曲を自選曲にしたときだけ使う）</label><div class="kadai2"></div></div></div>
       <div class="sides"></div><p class="warn" hidden></p>`;
     $('.kadai', art).append(makePicker({ id: `m${mi}kadai`, value: m.kadai, placeholder: '課題曲を曲名で検索',
       onChange: (k) => { m.kadai = k; markDirty(); renderMatches(); } }));
+    $('.kadai2', art).append(makePicker({ id: `m${mi}kadai2`, value: m.kadai2, placeholder: '課題曲2を曲名で検索',
+      onChange: (k) => { m.kadai2 = k; markDirty(); renderMatches(); } }));
     const sides = $('.sides', art);
     ['a', 'b'].forEach((sd) => {
       const opp = sd === 'a' ? 'b' : 'a';
@@ -349,13 +359,20 @@ function renderMatches() {
 function matchWarnings(m) {
   const w = [];
   if (m.a != null && m.a === m.b) w.push('同じ人どうしの対戦になっています');
-  if (!m.kadai) w.push('運営課題曲が未設定です');
+  const pa = m.aPick >= 0 ? m.aSongs[m.aPick] : '', pb = m.bPick >= 0 ? m.bSongs[m.bPick] : '';
+  if (pa && pa === pb) w.push(isMini() ? '両者が同じ曲を自選曲にしました（対戦曲は1曲）' : '両者が同じ曲を自選曲にしました。運営課題曲2を使います');
+  if (!isMini()) {
+    if (!m.kadai) w.push('運営課題曲が未設定です');
+    if (!m.kadai2) w.push('運営課題曲2が未設定です（両者が同じ曲を選んだときに必要）');
+    if (m.kadai && m.kadai === m.kadai2) w.push('運営課題曲と運営課題曲2が同じです');
+  }
   ['a', 'b'].forEach((sd) => {
     const name = nameOf(m[sd], sd === 'a' ? 'プレイヤーA' : 'プレイヤーB');
     const ks = m[sd + 'Songs'].filter(Boolean);
     if (new Set(ks).size !== ks.length) w.push(`${name} の自選曲に同じ譜面があります`);
     if (charts && ks.some((k) => { const c = charts.byKey.get(k); return c && !under(c.c, m.cap); })) w.push(`${name} の自選曲に上限を超える譜面があります`);
-    if (m.kadai && ks.includes(m.kadai)) w.push(`${name} の自選曲が運営課題曲と同じです`);
+    if (!isMini() && m.kadai && ks.includes(m.kadai)) w.push(`${name} の自選曲が運営課題曲と同じです`);
+    if (!isMini() && m.kadai2 && ks.includes(m.kadai2)) w.push(`${name} の自選曲が運営課題曲2と同じです`);
   });
   return w;
 }
@@ -381,7 +398,7 @@ $('#addMatch').onclick = () => { matches.push(emptyMatch()); markDirty(); render
 $('#applyDefaults').onclick = () => {
   readSettingsForm();
   confirmTwice($('#applyDefaults'), 'もう一度押すと全試合を上書き', () => {
-    matches.forEach((m) => { m.cap = settings.defaultCap; m.kadai = settings.defaultKadai || ''; });
+    matches.forEach((m) => { m.cap = settings.defaultCap; m.kadai = settings.defaultKadai || ''; m.kadai2 = settings.defaultKadai2 || ''; });
     markDirty(); renderMatches(); setMsg('全試合の上限と課題曲を、大会設定の既定値にしました', 'ok');
   });
 };
@@ -409,7 +426,11 @@ function viewModel() {
     title: settings.title, round: settings.round, notes: settings.notes,
     matches: matches.map((m) => ({
       aName: nameOf(m.a, 'プレイヤーA'), bName: nameOf(m.b, 'プレイヤーB'),
-      aSongs: m.aSongs.map(ch), bSongs: m.bSongs.map(ch), kadai: ch(m.kadai), cap: m.cap,
+      aSongs: m.aSongs.map(ch), bSongs: m.bSongs.map(ch), cap: m.cap,
+      finals: finalSongs({
+        format: settings.format, kadai: m.kadai, kadai2: m.kadai2, aName: nameOf(m.a, 'プレイヤーA'), bName: nameOf(m.b, 'プレイヤーB'),
+        aKey: m.aPick >= 0 ? m.aSongs[m.aPick] : '', bKey: m.bPick >= 0 ? m.bSongs[m.bPick] : '',
+      }).map((f) => ({ ...f, s: ch(f.key) })),
       aBan: m.aBan, aPick: m.aPick, bBan: m.bBan, bPick: m.bPick,
     })),
   };

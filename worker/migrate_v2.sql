@@ -1,0 +1,6 @@
+ALTER TABLE entries ADD COLUMN user_id INTEGER;
+CREATE UNIQUE INDEX IF NOT EXISTS entries_user ON entries (user_id);
+CREATE TABLE IF NOT EXISTS users (id INTEGER PRIMARY KEY AUTOINCREMENT, username TEXT NOT NULL UNIQUE, source TEXT NOT NULL, pin_hash TEXT, pin_salt TEXT, created_at TEXT NOT NULL DEFAULT (datetime('now')));
+CREATE TABLE IF NOT EXISTS sessions (token_hash TEXT PRIMARY KEY, user_id INTEGER NOT NULL, expires_at INTEGER NOT NULL);
+CREATE TABLE IF NOT EXISTS login_fails (username TEXT PRIMARY KEY, fails INTEGER NOT NULL, locked_until INTEGER NOT NULL);
+CREATE TABLE IF NOT EXISTS picks (match_id TEXT NOT NULL, entry_id INTEGER NOT NULL, songs TEXT NOT NULL DEFAULT '[]', ban INTEGER NOT NULL DEFAULT -1, pick INTEGER NOT NULL DEFAULT -1, updated_at TEXT NOT NULL DEFAULT (datetime('now')), PRIMARY KEY (match_id, entry_id));
