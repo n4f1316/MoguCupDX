@@ -25,7 +25,7 @@ const SEED = [
 ];
 
 // デモの中身の版。古い版のまま残っている・準備の途中で失敗したデータは作り直す
-const DEMO_VERSION = 5;
+const DEMO_VERSION = 6;
 let data;
 try { data = JSON.parse(localStorage.getItem(STORE)); } catch { data = null; }
 const fresh = !data || data.demoVersion !== DEMO_VERSION || !data.entries?.length;
@@ -69,13 +69,15 @@ const pickRandom = (arr) => arr[Math.floor(Math.random() * arr.length)];
 async function seed() {
   const c = await loadConsts();
   const keysIn = (lo, hi) => Object.entries(c).filter(([, v]) => v >= lo - 1e-9 && v <= hi + 1e-9).map(([k]) => k);
-  const lime = keysIn(14.0, 14.4), lemon = keysIn(14.7, 14.9);
+  // 運営課題曲は、その部門の上限（らいむ 13.9／れもん 14.9）以下の譜面から、2曲が重ならないように選ぶ
+  const two = (pool) => { const a = pickRandom(pool); return [a, pickRandom(pool.filter((k) => k !== a))]; };
+  const [lime1, lime2] = two(keysIn(13.7, 13.9)), [lemon1, lemon2] = two(keysIn(14.7, 14.9));
   await call('api/admin/state', { method: 'PUT', key: ADMIN_KEY, body: { settings: {
     title: '第3回 もぐらたたきカップ（デモ）', round: '', phase: 'closed', entryOpen: true, format: 'main',
     notice: 'これはデモです。入力した内容はこのブラウザの中にだけ保存され、本番には送られません。',
     divDefaults: {
-      lime: { cap: 13.9, kadai: pickRandom(lime), kadai2: pickRandom(lime) },
-      lemon: { cap: 14.9, kadai: pickRandom(lemon), kadai2: pickRandom(lemon) },
+      lime: { cap: 13.9, kadai: lime1, kadai2: lime2 },
+      lemon: { cap: 14.9, kadai: lemon1, kadai2: lemon2 },
     },
   } } });
   for (const s of SEED) {
