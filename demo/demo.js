@@ -25,7 +25,7 @@ const SEED = [
 ];
 
 // デモの中身の版。古い版のまま残っている・準備の途中で失敗したデータは作り直す
-const DEMO_VERSION = 4;
+const DEMO_VERSION = 5;
 let data;
 try { data = JSON.parse(localStorage.getItem(STORE)); } catch { data = null; }
 const fresh = !data || data.demoVersion !== DEMO_VERSION || !data.entries?.length;
@@ -75,7 +75,7 @@ async function seed() {
     notice: 'これはデモです。入力した内容はこのブラウザの中にだけ保存され、本番には送られません。',
     divDefaults: {
       lime: { cap: 13.9, kadai: pickRandom(lime), kadai2: pickRandom(lime) },
-      lemon: { cap: 14.6, kadai: pickRandom(lemon), kadai2: pickRandom(lemon) },
+      lemon: { cap: 14.9, kadai: pickRandom(lemon), kadai2: pickRandom(lemon) },
     },
   } } });
   for (const s of SEED) {
