@@ -6,7 +6,7 @@
 <meta name="robots" content="noindex">
 <title>もぐらたたきカップ 運営</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=M+PLUS+Rounded+1c:wght@500;800&family=Zen+Kaku+Gothic+New:wght@400;700&family=JetBrains+Mono:wght@500&display=swap">
-<link rel="stylesheet" href="common.css">
+<link rel="stylesheet" href="common.css?v=20261015k">
 <style>
 main{max-width:1280px;margin:0 auto;display:grid;gap:16px}
 .top{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:8px 16px}
@@ -21,6 +21,7 @@ th,td{padding:6px 8px;border-bottom:1px solid var(--line);text-align:left;white-
 th button{all:unset;cursor:pointer;color:var(--muted);font-size:12px}
 th button:focus-visible{outline:2px solid var(--accent)}
 td.num,th.num{text-align:right}
+td .btns{flex-wrap:nowrap}
 td input{padding:3px 6px;font-size:14px}
 /* 組み合わせ */
 .match{border:1px solid var(--line);border-radius:8px;padding:12px;display:grid;gap:10px}
@@ -37,7 +38,7 @@ td input{padding:3px 6px;font-size:14px}
 .warn{color:var(--danger);font-size:13px;margin:0}
 /* 譜面検索 */
 .picker{position:relative;display:grid;gap:2px}
-.picker .list{position:absolute;z-index:5;top:100%;left:0;right:0;max-height:300px;overflow:auto;background:var(--panel);border:1px solid var(--line);border-radius:6px;box-shadow:0 6px 20px rgba(0,0,0,.18);margin-top:2px}
+.picker .list{position:absolute;z-index:5;top:100%;left:0;right:0;max-height:300px;overflow:auto;background:var(--panel);border:1px solid var(--line);border-radius:6px;box-shadow:0 6px 20px rgba(31,45,61,.12);margin-top:2px}
 .picker .list button{all:unset;box-sizing:border-box;display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;width:100%;padding:6px 10px;cursor:pointer;font-size:14px}
 .picker .list button:hover,.picker .list button.on{background:var(--soft)}
 .picker .list .meta{font-family:var(--f-mono);font-size:12px;color:var(--muted)}
@@ -47,9 +48,17 @@ td input{padding:3px 6px;font-size:14px}
 .chosen.over{color:var(--danger)}
 /* 告知画像 */
 .imggrid{display:grid;grid-template-columns:minmax(0,1fr);gap:12px}
+.previews{display:grid;gap:12px}
 .canvasbox{border:1px solid var(--line);border-radius:8px;overflow:hidden;background:var(--soft)}
-.canvasbox img{display:block;width:100%;height:auto}
+.canvasbox canvas,.canvasbox img{display:block;width:100%;height:auto}
 #login{max-width:420px}
+.bmbox{border-top:1px solid var(--line);padding-top:12px;display:grid;gap:8px}
+.bmbox h2{margin:0}
+.bmbox ol{margin:0;padding-left:1.4em;display:grid;gap:2px}
+.bmlink{display:inline-block;padding:8px 16px;border-radius:999px;background:var(--accent);color:var(--accent-fg);font-weight:700;text-decoration:none;cursor:grab}
+.divdef{border-left:3px solid var(--accent);padding-left:12px;display:grid;gap:8px}
+.divdef h3{margin:0;font-family:var(--f-display);font-size:.95rem}
+#matchDiv button[aria-selected="true"],#imgDiv button[aria-selected="true"]{background:var(--panel);border-color:var(--accent);box-shadow:inset 0 0 0 2px var(--accent);font-weight:700}
 </style>
 </head>
 <body>
@@ -84,32 +93,39 @@ td input{padding:3px 6px;font-size:14px}
       <div class="btns" style="justify-content:space-between">
         <h2 style="margin:0">参加者 <span id="entryCount" class="num"></span></h2>
         <div class="btns">
+          <select id="entryDiv" aria-label="部門で絞り込む" style="width:auto"></select>
           <button type="button" id="csv">CSVで書き出す</button>
         </div>
       </div>
       <div class="tablewrap"><table id="entryTable"></table></div>
-      <p class="note">行の「編集」で内容を直せます。削除は2回押すと確定します。</p>
+      <p class="note">見出しを押すと並べ替えます。「編集」では名前・X・Discord・部門・レート・2fRATE・メモを直せます（部門別の回答は直せません）。削除は2回押すと確定します。「神」は神プレートの数と、その頭文字です。</p>
     </section>
 
     <section class="panel" data-pane="settings" hidden>
       <h2>大会設定</h2>
       <div class="row">
         <label>大会名<input id="sTitle" type="text"></label>
-        <label>ラウンド名<input id="sRound" type="text"></label>
       </div>
       <div class="row">
         <label style="display:flex;gap:6px;align-items:center;align-self:end;color:var(--fg)"><input id="sOpen" type="checkbox">参加申請を受け付ける</label>
         <label>申請の締切（日本時間、空欄で期限なし）<input id="sDeadline" type="datetime-local"></label>
       </div>
-      <label>申請ページのお知らせ<textarea id="sNotice" rows="2"></textarea></label>
-      <h2>自選曲の譜面定数</h2>
+      <label>参加者ページのお知らせ<textarea id="sNotice" rows="2"></textarea></label>
+      <h2>大会の形式</h2>
+      <label>形式<select id="sFormat">
+        <option value="main">本編（自選曲＋他選曲＋運営課題曲）</option>
+        <option value="mini">mini（運営課題曲なし、自選曲の投げ合いのみ）</option>
+      </select></label>
+      <p class="note">本編では、両者が同じ曲を自選曲にしたときだけ、運営課題曲を2曲にします（その曲＋運営課題曲2曲）。</p>
+      <h2>いまの段階</h2>
       <div class="row">
-        <label>下限（0 で下限なし）<input id="sMin" type="number" step="0.1" min="0" max="15"></label>
-        <label>上限<input id="sCap" type="number" step="0.1" min="1" max="15"></label>
+        <label>段階（参加者ができること）<select id="sPhase"></select></label>
+        <label>段階の一言（締切など。参加者ページに表示）<input id="sPhaseNote" type="text" placeholder="例 10/20 23:59 まで"></label>
       </div>
-      <p class="note" id="capInfo"></p>
-      <h2>運営課題曲</h2>
-      <div id="kadaiPicker"></div>
+      <p class="note">組み合わせ発表前 → 自選曲の提出 → BAN → 自選曲の決定 → 対戦曲確定 の順に切り替えます。BAN の段階になると、相手の自選曲が参加者に公開されます。</p>
+      <h2>新しい対戦カードの既定値（部門ごと）</h2>
+      <div id="divDefaults" style="display:grid;gap:12px"></div>
+      <p class="note">ペアを作るときに各試合へ入ります。試合ごとの値は「組み合わせ・選曲」で変えられます。</p>
       <h2>告知画像の下に入れる一言</h2>
       <label>組み合わせ発表<input id="nPair" type="text"></label>
       <label>選曲公開<input id="nReveal" type="text"></label>
@@ -119,18 +135,21 @@ td input{padding:3px 6px;font-size:14px}
     <section class="panel" data-pane="matches" hidden>
       <div class="btns" style="justify-content:space-between">
         <h2 style="margin:0">組み合わせ・選曲</h2>
+        <div class="tabs" role="group" aria-label="部門" id="matchDiv"></div>
         <div class="btns">
           <button type="button" id="pairFrate">2fRATE順にペアを作る</button>
           <button type="button" id="pairRandom">ランダムにペアを作る</button>
           <button type="button" id="addMatch">対戦カードを追加</button>
+          <button type="button" id="applyDefaults">既定の上限・課題曲をこの部門の全試合に入れる</button>
         </div>
       </div>
-      <p class="note">ペアを作り直すと、入力済みの選曲は消えます（2回押すと確定）。自選曲は譜面定数の上限・下限の範囲から検索できます。</p>
+      <p class="note">部門を選んでから操作します。ペアはその部門に申請した人だけで作ります。らいむ部門では、両者が Q11（Lv14）に「はい」と答えた試合は自動で Lv14 解禁になります。ペアを作り直すと、それまでの選曲は使われなくなります（2回押すと確定）。参加者が提出した選曲はここに表示され、運営が代わりに入力・修正することもできます。</p>
       <p class="warn" id="pairWarn" hidden></p>
       <div id="matchList" style="display:grid;gap:12px"></div>
     </section>
 
     <section class="panel" data-pane="images" hidden>
+      <div class="tabs" role="group" aria-label="部門" id="imgDiv"></div>
       <div class="btns">
         <div class="tabs" role="group" aria-label="画像の種類" id="kindTabs">
           <button type="button" data-kind="pair" aria-selected="true">組み合わせ発表</button>
@@ -139,20 +158,35 @@ td input{padding:3px 6px;font-size:14px}
         </div>
         <label id="imgMatchWrap" hidden style="min-width:240px">対象の試合<select id="imgMatch"></select></label>
       </div>
-      <div class="canvasbox"><img id="out" alt="生成された告知画像"></div>
+      <div class="previews" id="previews"></div>
       <div class="btns">
-        <button class="primary" id="dlOne" type="button">この画像を保存</button>
-        <button id="dlAll" type="button" hidden>全試合ぶん保存</button>
+        <button class="primary" id="copyData" type="button">画像用データをコピー（選んだ部門）</button>
+        <button id="dlOne" type="button">表示中の画像を保存</button>
         <span class="note" id="imgNote"></span>
+      </div>
+      <div class="bmbox">
+        <h2>ジャケット入りの告知画像を作る</h2>
+        <p class="note">ジャケットは公式サイトの画像のため、このページではプレビューとして表示するだけで、ジャケット入りの画像は保存できません（組み合わせ発表はジャケットを使わないので、ここで保存できます）。選曲公開と BAN結果・対戦曲は、maimaidx.jp の上で動く告知画像用のブックマークで作ってください。画像はそのブラウザの中で作るだけで、どこにも置きません。</p>
+        <ol class="note">
+          <li>下のボタンをブックマークバーへドラッグして登録する（できない場合は「コードをコピー」で、URL欄にコードを貼ったブックマークを作る）</li>
+          <li>ここで部門を選び「画像用データをコピー」を押す</li>
+          <li>maimaidx.jp にログインしたページでブックマークを押し、出てきた画面に貼り付けて「読み込む」</li>
+          <li>画像の種類と試合を選んで保存する</li>
+        </ol>
+        <div class="btns">
+          <a class="bmlink" id="bmLink" href="#">もぐカップ告知画像</a>
+          <button type="button" id="bmCopy">コードをコピー</button>
+        </div>
+        <p class="note">コードを貼るときは、URL欄の先頭が <code>javascript:</code> になっているか確かめてください。貼り付けると消えることがあります。組み合わせや選曲を変えたら、データをコピーし直してください。</p>
       </div>
     </section>
   </div>
 </main>
 <canvas id="cv" hidden></canvas>
 
-<script src="config.js"></script>
-<script src="common.js"></script>
-<script src="draw.js"></script>
-<script src="admin.js"></script>
+<script src="config.js?v=20261015k"></script>
+<script src="common.js?v=20261015k"></script>
+<script src="draw.js?v=20261015k"></script>
+<script src="admin.js?v=20261015k"></script>
 </body>
 </html>

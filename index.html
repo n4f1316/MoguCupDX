@@ -2,19 +2,84 @@
 <html lang="ja">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<title>もぐらたたきカップ 参加申請</title>
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>もぐらたたきカップ</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=M+PLUS+Rounded+1c:wght@500;800&family=Zen+Kaku+Gothic+New:wght@400;700&family=JetBrains+Mono:wght@500&display=swap">
-<link rel="stylesheet" href="common.css">
+<link rel="stylesheet" href="common.css?v=20261015k">
 <style>
-main{max-width:560px;margin:0 auto;display:grid;gap:16px}
-.hero{display:grid;gap:6px;padding-block:8px}
-.hero .eyebrow{font-family:var(--f-mono);font-size:12px;letter-spacing:.08em;color:var(--accent)}
+main{max-width:720px;margin:0 auto;display:grid;gap:16px}
+.hero{display:grid;gap:4px;padding-block:8px}
+.eyebrow{font-family:var(--f-mono);font-size:12px;letter-spacing:.08em;color:var(--accent)}
 .facts{display:grid;grid-template-columns:auto 1fr;gap:4px 16px;margin:0}
 .facts dt{color:var(--muted);font-size:13px}
 .facts dd{margin:0}
+.userbar{display:flex;flex-wrap:wrap;align-items:center;gap:8px;justify-content:space-between}
+.badge{display:inline-block;font-size:11px;font-weight:700;padding:2px 8px;border-radius:999px;background:var(--soft);color:var(--accent);margin-left:6px}
+.seg{display:flex;gap:4px}
+.seg button[aria-pressed="true"]{background:var(--accent);color:var(--accent-fg);border-color:var(--accent)}
+.phase{display:inline-block;font-weight:700;font-size:13px;padding:2px 10px;border-radius:999px;background:var(--accent);color:var(--accent-fg)}
+.vs{display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);align-items:center;gap:12px;text-align:center}
+.vs .nm{font-family:var(--f-display);font-weight:800;font-size:1.2rem;overflow-wrap:anywhere}
+.vs .v{font-family:var(--f-display);font-weight:800;color:var(--accent)}
+/* 譜面の行（2fRATE の計算ページと同じ並び） */
+.song{display:grid;grid-template-columns:44px minmax(0,1fr) auto;gap:10px;align-items:center}
+.jk{width:44px;height:44px;border-radius:8px;object-fit:cover;display:block;background:var(--soft);box-shadow:0 0 0 1px var(--line)}
+.sname{font-weight:700;line-height:1.35;overflow-wrap:anywhere}
+.chips{display:flex;flex-wrap:wrap;gap:4px;margin-top:3px}
+.chip{display:inline-block;font-size:11px;font-weight:700;line-height:1;padding:4px 7px;border-radius:6px;color:#fff;white-space:nowrap}
+.k-DX{background:linear-gradient(90deg,#E0348C,#F29A2E)} .k-ST{background:#3B82C4}
+.d-BASIC{background:#2E9E5B} .d-ADVANCED{background:#D98E04} .d-EXPERT{background:#E0434B} .d-MASTER{background:#8E44D6}
+.d-REMASTER{background:#fff;color:#8E44D6;box-shadow:inset 0 0 0 1.5px #B68BE0}
+.chip.c{background:var(--soft);color:var(--fg)} .chip.lv{background:transparent;color:var(--muted);padding-left:2px}
+/* 選んだ3曲 */
+.slots{display:grid;gap:8px}
+.slot{border:1.5px dashed var(--line);border-radius:10px;padding:8px 10px;min-height:62px;display:grid;align-items:center}
+.slot.filled{border-style:solid;border-color:var(--accent)}
+.slot .empty{color:var(--muted);font-size:13px}
+.slotno{font-family:var(--f-mono);font-size:12px;color:var(--muted)}
+/* 楽曲一覧 */
+.search{border-radius:999px;padding:8px 14px}
+.tabs{display:flex;flex-wrap:wrap;gap:6px}
+.tabs button{border-radius:999px;padding:4px 12px;font-size:13px}
+.tabs button[aria-pressed="true"]{background:var(--fg);color:var(--bg);border-color:var(--fg)}
+.list{border:1px solid var(--line);border-radius:12px;overflow:hidden}
+.srow{all:unset;box-sizing:border-box;display:grid;grid-template-columns:44px minmax(0,1fr) auto;gap:10px;align-items:center;width:100%;padding:8px 12px;border-top:1px solid var(--line);cursor:pointer}
+.srow:first-child{border-top:0}
+.srow:hover{background:var(--soft)}
+.srow:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
+.srow.on{background:var(--soft)}
+.srow .go{font-size:12px;font-weight:800;color:var(--accent);white-space:nowrap}
+.srow[aria-disabled="true"]{opacity:.45;cursor:not-allowed}
+.pager{display:flex;flex-wrap:wrap;justify-content:center;gap:6px}
+.pager button{min-width:40px;padding:4px 10px;border-radius:999px}
+.pager button.cur{background:var(--fg);color:var(--bg);border-color:var(--fg)}
+/* BAN・決定 */
+.choices{display:grid;gap:8px}
+.choice{all:unset;box-sizing:border-box;border:1.5px solid var(--line);border-radius:10px;padding:8px 10px;cursor:pointer}
+.choice:hover{border-color:var(--accent)}
+.choice:focus-visible{outline:2px solid var(--accent)}
+.choice[aria-pressed="true"]{border-color:var(--accent);background:var(--soft)}
+.choice.banned{opacity:.5;cursor:not-allowed;text-decoration:line-through}
+.tag{font-size:11px;font-weight:800;padding:2px 8px;border-radius:999px;white-space:nowrap}
+.tag.ban{background:#E0434B;color:#fff} .tag.pick{background:var(--accent);color:var(--accent-fg)}
+.q{color:var(--fg);font-size:14px}
+.q small{color:var(--muted);font-size:12px;line-height:1.6}
+.q i{font-style:normal;font-size:11px;color:var(--danger);margin-left:4px}
+fieldset.q{border:0;padding:0;margin:0;display:grid;gap:6px;min-width:0}
+fieldset.q legend{padding:0;margin-bottom:4px}
+.checks{display:flex;flex-wrap:wrap;gap:6px 14px}
+.checks label{display:flex;align-items:center;gap:6px;color:var(--fg);font-size:14px}
+.checks.plates{gap:6px}
+.checks.plates label{border:1px solid var(--line);border-radius:999px;padding:3px 10px 3px 6px;background:var(--bg)}
+.checks.plates label:has(input:checked){border-color:var(--accent);background:var(--soft)}
+.divq{border-left:3px solid var(--accent);padding-left:12px;display:grid;gap:12px}
+.divq h3{margin:0;font-family:var(--f-display);font-size:1rem}
+.lv14{display:inline-block;font-size:11px;font-weight:800;padding:2px 8px;border-radius:999px;background:#fff3d6;color:#8a5a00;margin-left:6px}
+.from2f{background:#eef7e0;border-color:#9ccc65}
+.from2fNote{background:#eef7e0;border-radius:8px;padding:8px 10px;color:var(--fg)}
 .hp{position:absolute;left:-9999px;width:1px;height:1px;overflow:hidden}
-.done{border-color:var(--ok)}
+.foot{font-size:12px;color:var(--muted);line-height:1.8}
+@media (max-width:520px){.srow{grid-template-columns:40px minmax(0,1fr)}.srow .go{display:none}.jk{width:40px;height:40px}.song{grid-template-columns:40px minmax(0,1fr) auto}}
 </style>
 </head>
 <body>
@@ -22,105 +87,107 @@ main{max-width:560px;margin:0 auto;display:grid;gap:16px}
   <header class="hero">
     <span class="eyebrow">maimai 非公式大会</span>
     <h1 id="title">もぐらたたきカップ</h1>
-    <p class="note">参加申請ページ</p>
   </header>
 
-  <section class="panel" id="info" aria-label="大会情報">
+  <section class="panel" aria-label="お知らせ">
     <dl class="facts">
-      <dt>受付</dt><dd id="fOpen">読み込み中…</dd>
+      <dt>参加申請</dt><dd id="fOpen">読み込み中…</dd>
       <dt>締切</dt><dd id="fDeadline">-</dd>
-      <dt>自選曲の定数</dt><dd id="fCap">-</dd>
-      <dt>申請数</dt><dd id="fCount" class="num">-</dd>
+      <dt>いまの段階</dt><dd><span class="phase" id="fPhase">-</span> <span class="note" id="fPhaseNote"></span></dd>
     </dl>
     <p class="note" id="notice" hidden></p>
   </section>
 
-  <form class="panel" id="form" novalidate>
-    <h2>参加申請</h2>
-    <label>エントリー名（大会で表示される名前、20文字まで）
-      <input id="entryName" name="entryName" type="text" maxlength="20" required autocomplete="nickname">
-    </label>
-    <label>X（Twitter）の ID
-      <input id="xId" name="xId" type="text" maxlength="16" required placeholder="@ なしで入力（例 Porto_mint）" autocapitalize="off" spellcheck="false">
-    </label>
-    <div class="row">
-      <label>maimai のレート
-        <input id="rating" name="rating" type="number" inputmode="numeric" min="0" max="20000" step="1" required placeholder="例 15800">
-      </label>
-      <label>2fRATE（☆7まで）
-        <input id="frate" name="frate" type="number" inputmode="decimal" min="0" max="30" step="0.001" required placeholder="例 13.452">
-      </label>
+  <p class="msg" id="msg" role="status" aria-live="polite"></p>
+
+  <!-- ログイン・新規登録 -->
+  <form class="panel" id="auth" hidden novalidate>
+    <div class="seg" role="group" aria-label="ログインか新規登録か">
+      <button type="button" data-mode="login" aria-pressed="true">ログイン</button>
+      <button type="button" data-mode="register" aria-pressed="false">新規登録</button>
     </div>
-    <div class="hp" aria-hidden="true"><label>website<input id="website" name="website" tabindex="-1" autocomplete="off"></label></div>
-    <p class="note">2fRATE は <a href="https://n4f1316.github.io/dxscore-tools/" target="_blank" rel="noopener">2fRATE のページ</a>のブックマークレットで確認できます。</p>
-    <div class="btns"><button class="primary" id="submit" type="submit">申請する</button></div>
-    <p class="msg" id="msg" role="status" aria-live="polite"></p>
+    <p class="note" id="authNote">2fRATE のランキングに登録している人は、2fRATE のユーザー名と PIN でそのままログインできます。</p>
+    <label>ユーザー名（英数字と _ で3〜16文字、公開されません）
+      <input id="username" type="text" autocomplete="username" autocapitalize="off" spellcheck="false" maxlength="16">
+    </label>
+    <label>PIN（数字4〜8桁）
+      <input id="pin" type="password" inputmode="numeric" autocomplete="current-password" maxlength="8">
+    </label>
+    <div class="btns"><button class="primary" id="authSubmit" type="submit">ログイン</button></div>
   </form>
+
+  <div class="panel userbar" id="userbar" hidden>
+    <span>ログイン中：<b id="uName"></b><span class="badge" id="uLinked" hidden>2fRATE 連携</span></span>
+    <button type="button" class="ghost" id="logout">ログアウト</button>
+  </div>
+
+  <!-- 参加申請 -->
+  <form class="panel" id="entryForm" hidden novalidate>
+    <h2>参加申請</h2>
+    <p class="note from2fNote" id="from2fNote" hidden>2fRATE に登録されている値を、2fRATE・☆5・☆6 の欄にあらかじめ入れています（色の付いた欄）。違っていれば書き直してください。</p>
+    <label class="q"><span><b>Q1.</b> あなたの X（Twitter）の ID を教えてください <i>必須</i></span>
+      <input id="xId" type="text" maxlength="16" placeholder="記入例：@Porto_mint" autocapitalize="off" spellcheck="false">
+    </label>
+    <label class="q"><span><b>Q2.</b> あなたが Discord で使用している名前を教えてください <i>必須</i></span>
+      <small>マッチング決定後のロール振り分けや、Discord サーバーへの参加の可否を確認するために使用します。Discord Nitro に課金していてサーバーでの名前を変える予定の方は、本スコアタの Discord サーバーで使用する名前を記入してください。</small>
+      <input id="discord" type="text" maxlength="40" autocapitalize="off" spellcheck="false">
+    </label>
+    <label class="q"><span><b>Q3.</b> あなたがスコアタで使用する名前を記入してください <i>必須</i></span>
+      <input id="entryName" type="text" maxlength="20" autocomplete="nickname">
+    </label>
+    <fieldset class="q"><legend><b>Q4.</b> あなたが参加したい部門を選択してください（複数選択可） <i>必須</i></legend>
+      <div class="checks" id="divChecks"></div>
+    </fieldset>
+    <label class="q"><span><b>Q5.</b> あなたの現在のレートを教えてください <i>必須</i></span>
+      <input id="rating" type="number" inputmode="numeric" min="0" max="20000" step="1" placeholder="例 15800">
+    </label>
+    <label class="q"><span><b>Q6.</b> あなたの 2fRATE（☆7まで）を教えてください <i>必須</i></span>
+      <small><a href="https://n4f1316.github.io/dxscore-tools/" target="_blank" rel="noopener">2fRATE のページ</a>で確認できます。</small>
+      <input id="frate" type="number" inputmode="decimal" min="0" max="30" step="0.001" placeholder="例 13.452">
+    </label>
+    <fieldset class="q"><legend><b>Q7.</b> あなたの神プレートの獲得状況について教えてください</legend>
+      <small>回答するのは、14以上の MASTER 譜面が終了しているものにしてください。該当なしの場合は未回答で大丈夫です。</small>
+      <div class="btns"><button type="button" id="plateAll" class="ghost">すべて選択</button></div>
+      <div class="checks plates" id="plateChecks"></div>
+    </fieldset>
+    <div class="divq" id="qLime" hidden>
+      <h3><span class="divpill lime">らいむ部門</span></h3>
+      <div class="row">
+        <label class="q"><span><b>Q8.</b> MASTER の星5達成譜面数 <i>必須</i></span><input id="m5" type="number" inputmode="numeric" min="0" step="1"></label>
+        <label class="q"><span><b>Q9.</b> Re:MASTER の星5達成譜面数 <i>必須</i></span><input id="r5" type="number" inputmode="numeric" min="0" step="1"></label>
+        <label class="q"><span><b>Q10.</b> MASTER・Re:MASTER の星6達成合計譜面数 <i>必須</i></span><input id="s6" type="number" inputmode="numeric" min="0" step="1"></label>
+      </div>
+      <fieldset class="q"><legend><b>Q11.</b> 自選曲にレベル14を1曲含められるようにしたいですか？ <i>必須</i></legend>
+        <small>マッチング決定時に両者が承諾した場合にのみ、レベル14が解禁されます。そのため、承諾した場合でもレベル14を自選曲に含められない可能性があります。</small>
+        <div class="checks"><label><input type="radio" name="lv14" value="yes">はい</label><label><input type="radio" name="lv14" value="no">いいえ</label></div>
+      </fieldset>
+    </div>
+    <div class="divq" id="qLemon" hidden>
+      <h3><span class="divpill lemon">れもん部門</span></h3>
+      <div class="row">
+        <label class="q"><span><b>Q12.</b> レベル14の AP 達成譜面数 <i>必須</i></span><input id="ap14" type="number" inputmode="numeric" min="0" step="1"></label>
+        <label class="q"><span><b>Q13.</b> レベル14+の AP 達成譜面数 <i>必須</i></span><input id="ap14p" type="number" inputmode="numeric" min="0" step="1"></label>
+      </div>
+    </div>
+    <div class="hp" aria-hidden="true"><label>website<input id="website" tabindex="-1" autocomplete="off"></label></div>
+    <div class="btns"><button class="primary" type="submit">申請する</button></div>
+  </form>
+
+  <section class="panel" id="entryDone" hidden>
+    <h2>参加申請済み</h2>
+    <dl class="facts" id="entryFacts"></dl>
+    <p class="note">内容を直したいときは運営に連絡してください。</p>
+  </section>
+
+  <!-- 自分の試合（部門ごと） -->
+  <div id="matchBox" style="display:grid;gap:16px" hidden></div>
+
+  <p class="foot">非公式のファンメイドツールです。株式会社セガおよび関連会社とは一切関係ありません。楽曲・ジャケット画像の著作権は、株式会社セガおよび各権利者に帰属します。</p>
 </main>
 
-<script src="config.js"></script>
-<script src="common.js"></script>
-<script>
-const $ = (s) => document.querySelector(s);
-let open = false;
-
-function fmtDeadline(s) {
-  if (!s) return '期限なし';
-  const [d, t] = s.split('T');
-  const [y, m, dd] = d.split('-');
-  return `${+y}年${+m}月${+dd}日 ${t || ''}（日本時間）`;
-}
-
-async function loadInfo() {
-  try {
-    const { settings: s, entryCount } = await api('api/public');
-    $('#title').textContent = s.title;
-    document.title = s.title + ' 参加申請';
-    open = s.entryOpen;
-    $('#fOpen').textContent = open ? '受付中' : '受付終了';
-    $('#fDeadline').textContent = fmtDeadline(s.entryDeadline);
-    $('#fCap').textContent = (s.constMin ? fmtConst(s.constMin) + ' 以上 ' : '') + fmtConst(s.constCap) + ' 以下';
-    $('#fCount').textContent = entryCount + '人';
-    if (s.notice) { $('#notice').hidden = false; $('#notice').textContent = s.notice; }
-    if ($('#submit')) $('#submit').disabled = !open;
-    if (!open && $('#submit')) setMsg('参加申請の受付は終了しています', 'err');
-  } catch (e) {
-    $('#fOpen').textContent = '読み込めませんでした';
-    console.error(e);
-    setMsg(e.message, 'err');
-  }
-}
-
-function setMsg(t, cls = '') { const m = $('#msg'); if (!m) return; m.textContent = t; m.className = 'msg ' + cls; }
-
-$('#form').addEventListener('submit', async (e) => {
-  e.preventDefault();
-  const v = {
-    entryName: $('#entryName').value.trim(),
-    xId: $('#xId').value.trim().replace(/^@/, ''),
-    rating: Number($('#rating').value),
-    frate: Number($('#frate').value),
-    website: $('#website').value,
-  };
-  if (!v.entryName) return setMsg('エントリー名を入力してください', 'err');
-  if (!/^[A-Za-z0-9_]{1,15}$/.test(v.xId)) return setMsg('X の ID は英数字と _ の15文字以内で入力してください', 'err');
-  if ($('#rating').value === '' || !Number.isInteger(v.rating)) return setMsg('maimai のレートを整数で入力してください', 'err');
-  if ($('#frate').value === '' || !Number.isFinite(v.frate)) return setMsg('2fRATE を入力してください', 'err');
-  $('#submit').disabled = true;
-  setMsg('送信しています…');
-  try {
-    await api('api/entry', { method: 'POST', body: v });
-    $('#form').classList.add('done');
-    $('#form').innerHTML = `<h2>申請を受け付けました</h2>
-      <p style="margin:0">エントリー名「${esc(v.entryName)}」（@${esc(v.xId)}）で申請しました。今後の案内をお待ちください。</p>`;
-    loadInfo();
-  } catch (err) {
-    setMsg(err.message, 'err');
-    $('#submit').disabled = !open;
-  }
-});
-
-loadInfo();
-</script>
+<script src="config.js?v=20261015k"></script>
+<script src="common.js?v=20261015k"></script>
+<script src="draw.js?v=20261015k"></script>
+<script src="player.js?v=20261015k"></script>
 </body>
 </html>
