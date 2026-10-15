@@ -65,7 +65,14 @@ const DrawKit = (() => {
     }
     ctx.fillStyle = C.mute; ctx.globalAlpha = 0.35; ctx.fillRect(80, 206, W - 160, 2); ctx.globalAlpha = 1;
   }
-  function footer(h, text) { if (text) fit(text, 80, h - 34, W - 160, 26, 700, FB, 'left', C.mute); }
+  // 右下に権利表記、左下に運営の一言
+  const CREDIT = '非公式大会 ／ 楽曲・ジャケット © SEGA';
+  function footer(h, text) {
+    ctx.font = `700 20px ${FB}`;
+    const cw = ctx.measureText(CREDIT).width;
+    fit(CREDIT, W - 80, h - 34, cw, 20, 700, FB, 'right', C.mute);
+    if (text) fit(text, 80, h - 34, W - 160 - cw - 32, 26, 700, FB, 'left', C.mute);
+  }
   const label = (n) => 'MATCH ' + String(n).padStart(2, '0');
 
   // 譜面カード（ジャケット・難易度・定数・曲名）
