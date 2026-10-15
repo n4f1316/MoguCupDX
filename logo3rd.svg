@@ -1,0 +1,77 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <defs>
+    <clipPath id="inside"><circle cx="512" cy="512" r="384"/></clipPath>
+  </defs>
+
+  <!-- もぐら本体（丸枠の内側で切る） -->
+  <g clip-path="url(#inside)">
+    <path d="M 190 1000 C 196 640 318 372 510 372 C 712 372 850 620 870 1000 Z" fill="#222"/>
+    <!-- 左の手（1st と同じ、穴のふちにかけた手） -->
+    <path d="M 250 830 C 270 760 360 745 405 800" fill="none" stroke="#fff" stroke-width="16" stroke-linecap="round"/>
+    <g stroke="#fff" stroke-width="15" stroke-linecap="round">
+      <line x1="300" y1="830" x2="306" y2="880"/>
+      <line x1="338" y1="818" x2="345" y2="872"/>
+      <line x1="376" y1="822" x2="380" y2="870"/>
+    </g>
+  </g>
+
+  <!-- ヘルメット（少し傾けて勢いを出す） -->
+  <g transform="rotate(-7 512 440)" stroke="#222" stroke-width="18" stroke-linejoin="round">
+    <path d="M 335 455 C 328 215 692 215 690 455 Z" fill="#fff"/>
+    <path d="M 476 282 L 476 448 M 550 282 L 550 448" fill="none" stroke-width="16" stroke-linecap="round"/>
+    <rect x="300" y="440" width="425" height="48" rx="24" fill="#fff"/>
+  </g>
+
+  <!-- 顔：ピクトグラム風。目は「ハの字」の白い線だけ（1st の ×、2nd の ^ と同じ記号的な目） -->
+  <g stroke="#fff" stroke-width="22" stroke-linecap="round">
+    <line x1="410" y1="560" x2="472" y2="588"/>
+    <line x1="616" y1="560" x2="554" y2="588"/>
+  </g>
+
+  <!-- 鼻まわり（2nd と同じ白い口もと。口は描かない） -->
+  <path d="M 513 640 C 584 640 612 684 598 716 C 584 744 550 752 513 752 C 476 752 442 744 428 716 C 414 684 442 640 513 640 Z" fill="#fff"/>
+  <ellipse cx="513" cy="678" rx="32" ry="22" fill="#222"/>
+  <!-- ひげ -->
+  <g stroke="#fff" stroke-width="10" stroke-linecap="round">
+    <line x1="418" y1="684" x2="340" y2="672"/>
+    <line x1="418" y1="704" x2="342" y2="716"/>
+    <line x1="608" y1="684" x2="686" y2="672"/>
+    <line x1="608" y1="704" x2="684" y2="716"/>
+  </g>
+
+  <!-- 振り上げた腕（体の中から伸ばし、下端は丸枠で隠す） -->
+  <g clip-path="url(#inside)">
+    <path d="M 690 980 C 730 760 752 600 748 486" fill="none" stroke="#fff" stroke-width="110" stroke-linecap="round"/>
+    <path d="M 690 980 C 730 760 752 600 748 486" fill="none" stroke="#222" stroke-width="82" stroke-linecap="round"/>
+  </g>
+
+  <!-- ハンマー（丸枠を突き破るように） -->
+  <g transform="rotate(24 760 450)">
+    <rect x="736" y="230" width="48" height="320" rx="24" fill="#222" stroke="#fff" stroke-width="12"/>
+  </g>
+
+  <!-- ハンマーを握る手（白い拳） -->
+  <g stroke="#222" stroke-width="16" stroke-linecap="round">
+    <rect x="696" y="400" width="116" height="116" rx="50" fill="#fff"/>
+    <line x1="720" y1="446" x2="790" y2="446"/>
+    <line x1="720" y1="476" x2="790" y2="476"/>
+  </g>
+
+  <!-- 振りの勢いを表す線 -->
+  <g stroke="#222" stroke-width="16" stroke-linecap="round" fill="none">
+    <path d="M 622 252 Q 654 218 696 200"/>
+    <path d="M 676 286 Q 704 254 740 238"/>
+  </g>
+  <!-- 1st と同じ「カーン」の線（今度は叩く側） -->
+  <g stroke="#222" stroke-width="16" stroke-linecap="round">
+    <line x1="318" y1="262" x2="366" y2="292"/>
+    <line x1="368" y1="206" x2="394" y2="256"/>
+  </g>
+
+  <!-- 丸枠 -->
+  <circle cx="512" cy="512" r="402" fill="none" stroke="#222" stroke-width="40"/>
+  <!-- ハンマーの頭は枠の上に重ねる -->
+  <g transform="rotate(24 760 450)">
+    <rect x="662" y="150" width="196" height="120" rx="26" fill="#222" stroke="#fff" stroke-width="14"/>
+  </g>
+</svg>

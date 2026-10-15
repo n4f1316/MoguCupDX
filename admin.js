@@ -292,7 +292,7 @@ const PHASE_LABEL = { closed: '組み合わせ発表前（参加者に対戦カ�
 const defOf = (div) => settings.divDefaults?.[div] || { cap: 14, kadai: '', kadai2: '' };
 function renderSettingsForm() {
   const s = settings;
-  $('#sTitle').value = s.title; $('#sRound').value = s.round; $('#sOpen').checked = !!s.entryOpen;
+  $('#sTitle').value = s.title; $('#sOpen').checked = !!s.entryOpen;
   $('#sDeadline').value = s.entryDeadline || ''; $('#sNotice').value = s.notice || '';
   $('#sPhase').innerHTML = Object.entries(PHASE_LABEL).map(([k, v]) => `<option value="${k}"${k === s.phase ? ' selected' : ''}>${v}</option>`).join('');
   $('#sPhaseNote').value = s.phaseNote || '';
@@ -316,7 +316,7 @@ function renderSettingsForm() {
 function readSettingsForm() {
   if (!settings) return;
   Object.assign(settings, {
-    title: $('#sTitle').value.trim(), round: $('#sRound').value.trim(), entryOpen: $('#sOpen').checked,
+    title: $('#sTitle').value.trim(), round: '', entryOpen: $('#sOpen').checked,
     entryDeadline: $('#sDeadline').value, notice: $('#sNotice').value.trim(),
     phase: $('#sPhase').value || settings.phase, phaseNote: $('#sPhaseNote').value.trim(),
     format: $('#sFormat').value || 'main',
@@ -499,7 +499,7 @@ function viewModel() {
   readSettingsForm();
   const ch = (k) => (k && charts?.byKey.get(k)) || null;
   return {
-    title: settings.title, round: settings.round, notes: settings.notes, divName: divName(curDiv),
+    title: settings.title, badge: divName(curDiv), notes: settings.notes,
     matches: divMatches().map((m) => ({
       aName: nameOf(m.a, 'プレイヤーA'), bName: nameOf(m.b, 'プレイヤーB'),
       aSongs: m.aSongs.map(ch), bSongs: m.bSongs.map(ch), cap: m.cap, lv14: m.lv14,
@@ -540,7 +540,7 @@ $('#imgMatch').onchange = (e) => { imgIdx = +e.target.value; renderImage(); };
 
 const KIND_NAME = { pair: '組み合わせ', reveal: '選曲公開', final: '対戦曲' };
 const safe = (s) => String(s || '').replace(/[\\/:*?"<>|\s]/g, '_');
-const fileName = (k, i) => `${safe(settings.round || 'mogucup')}_${safe(divName(curDiv))}_${KIND_NAME[k]}${k === 'pair' ? '' : '_M' + String(i + 1).padStart(2, '0')}.png`;
+const fileName = (k, i) => `${safe(settings.title || 'mogucup')}_${safe(divName(curDiv))}_${KIND_NAME[k]}${k === 'pair' ? '' : '_M' + String(i + 1).padStart(2, '0')}.png`;
 async function download(k, i) {
   await DrawKit.render($('#cv'), viewModel(), k, i);
   const blob = await new Promise((r) => $('#cv').toBlob(r, 'image/png'));

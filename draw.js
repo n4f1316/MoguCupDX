@@ -5,7 +5,8 @@ const DrawKit = (() => {
   const FB = '"Zen Kaku Gothic New","Hiragino Sans","Noto Sans JP",sans-serif';
   const FM = '"JetBrains Mono",monospace';
   const W = 1600;
-  let cv, ctx, V;
+  let cv, ctx, V, logo = null;
+  const LOGO_URL = 'logo3rd.svg?v=1';
 
   const imgCache = new Map();
   function loadImg(url) {
@@ -36,15 +37,22 @@ const DrawKit = (() => {
     ctx.fillStyle = g; ctx.fillRect(0, 0, W, h);
     ctx.fillStyle = C.hole; // もぐらの穴
     for (let y = 60; y < h; y += 150) for (let x = (y / 150) % 2 ? 40 : 115; x < W; x += 150) { ctx.beginPath(); ctx.ellipse(x, y, 46, 16, 0, 0, Math.PI * 2); ctx.fill(); }
+    // 大会アイコンを薄く（85% 透過）背景に敷く
+    if (logo) {
+      const size = Math.min(h - 60, 920);
+      ctx.save(); ctx.globalAlpha = 0.15;
+      ctx.drawImage(logo, (W - size) / 2, (h - size) / 2, size, size);
+      ctx.restore();
+    }
     ctx.fillStyle = C.accent; ctx.fillRect(0, 0, W, 10);
     ctx.textBaseline = 'alphabetic';
-    fit((V.title || 'もぐらたたきカップ') + (V.divName ? '　' + V.divName : ''), 80, 92, 1000, 34, 800, FD, 'left', C.mute);
+    fit(V.title || 'もぐらたたきカップ', 80, 92, 1000, 34, 800, FD, 'left', C.mute);
     fit(heading, 80, 170, 1000, 72, 800, FD, 'left', C.fg);
-    if (V.round) {
+    if (V.badge) { // 右上の丸いラベル：部門名
       ctx.font = `800 34px ${FD}`;
-      const tw = Math.min(ctx.measureText(V.round).width + 56, 420);
+      const tw = Math.min(ctx.measureText(V.badge).width + 56, 420);
       rr(W - 80 - tw, 112, tw, 64, 32); ctx.fillStyle = C.accent; ctx.fill();
-      fit(V.round, W - 80 - tw / 2, 156, tw - 40, 34, 800, FD, 'center', C.onAccent);
+      fit(V.badge, W - 80 - tw / 2, 156, tw - 40, 34, 800, FD, 'center', C.onAccent);
     }
     ctx.fillStyle = C.mute; ctx.globalAlpha = 0.35; ctx.fillRect(80, 206, W - 160, 2); ctx.globalAlpha = 1;
   }
@@ -135,7 +143,7 @@ const DrawKit = (() => {
   }
 
   function drawReveal(m, i, imgs) {
-    const h = 920;
+    const h = 960;
     base(h, `選曲公開　${label(i + 1)}`);
     const y = columns(m, 'reveal', imgs);
     rr(80, y + 20, W - 160, 96, 16); ctx.fillStyle = C.card2; ctx.fill(); ctx.lineWidth = 1.5; ctx.strokeStyle = C.accent; ctx.stroke();
@@ -159,9 +167,10 @@ const DrawKit = (() => {
     footer(h, V.notes.final);
   }
 
-  // view: { title, round, notes, matches:[{ aName, bName, aSongs, bSongs, aBan, aPick, bBan, bPick, cap, finals:[{ s, label, kind }] }] }
+  // view: { title, badge, notes, matches:[{ aName, bName, aSongs, bSongs, aBan, aPick, bBan, bPick, cap, finals:[{ s, label, kind }] }] }
   async function render(canvas, view, kind, idx) {
     cv = canvas; ctx = cv.getContext('2d'); V = view;
+    if (!logo) logo = await loadImg(LOGO_URL);
     await Promise.all([`800 40px ${FD}`, `700 40px ${FB}`, `500 22px ${FM}`].map((f) => document.fonts.load(f, 'もぐらA'))).catch(() => {});
     if (kind === 'pair') { drawPair(); return; }
     const m = V.matches[idx];
