@@ -43,6 +43,9 @@ function jacketEl(file) {
 // 部門と神プレート（申請の設問）
 const DIVISIONS = [{ id: 'lime', name: 'らいむ部門' }, { id: 'lemon', name: 'れもん部門' }];
 const divName = (id) => DIVISIONS.find((d) => d.id === id)?.name || '';
+const DIV_COLOR = { lime: '#c6ec7e', lemon: '#ffe259' };
+// 部門名を色付きの丸い背景で表示する（short：「部門」を省く）
+const divPill = (id, short) => (id ? `<span class="divpill ${id}">${esc(short ? divName(id).replace('部門', '') : divName(id))}</span>` : '');
 const PLATES = ['真', '超', '檄', '橙', '暁', '桃', '櫻', '紫', '菫', '白', '雪', '輝', '舞', '熊', '華', '爽', '煌', '宙', '星', '祭', '祝', '双', '宴', '鏡', '彩', '丸', '廻'];
 
 // 自選曲として選べるか：上限以下。Lv14解禁の試合では、上限を超える Lv14（14.0〜14.5）も候補（1曲まで）
