@@ -1,7 +1,7 @@
 // もぐらたたきカップ 運営ページ
 const $ = (s, r = document) => r.querySelector(s);
 const $$ = (s, r = document) => [...r.querySelectorAll(s)];
-const KEY_STORE = 'mogucupdx-admin-key';
+const KEY_STORE = window.MOGU_DEMO ? 'mogucupdx-demo-admin-key' : 'mogucupdx-admin-key'; // デモは本番と別に保存
 
 let KEY = '';
 let entries = [];      // [{ id, entry_name, x_id, rating, frate, memo, created_at }]
@@ -122,7 +122,7 @@ const COLS = [
   ['entry_name', '名前', (e) => e.entry_name, (e) => esc(e.entry_name)],
   ['x_id', 'X', (e) => e.x_id.toLowerCase(), (e) => `<a href="https://x.com/${encodeURIComponent(e.x_id)}" target="_blank" rel="noopener">@${esc(e.x_id)}</a>`],
   ['discord', 'Discord', (e) => A(e).discord || '', (e) => esc(A(e).discord || '-')],
-  ['div', '部門', (e) => (A(e).divisions || []).join(), (e) => (A(e).divisions || []).map((d) => esc(divName(d).replace('部門', ''))).join('・') || '-'],
+  ['div', '部門', (e) => (A(e).divisions || []).join(), (e) => (A(e).divisions || []).map((d) => divPill(d, true)).join(' ') || '-'],
   ['username', 'ユーザー', (e) => e.username || '', (e) => userCell(e)],
   ['rating', 'レート', (e) => e.rating, (e) => e.rating, 1],
   ['frate', '2fRATE', (e) => e.frate, (e) => Number(e.frate).toFixed(3), 1],
@@ -159,7 +159,7 @@ function renderEntries() {
         entry_name: `<input id="ed-name" value="${esc(e.entry_name)}" maxlength="20">`,
         x_id: `<input id="ed-x" value="${esc(e.x_id)}" maxlength="15">`,
         discord: `<input id="ed-discord" value="${esc(A(e).discord || '')}" maxlength="40">`,
-        div: DIVISIONS.map((d) => `<label style="display:flex;gap:4px;align-items:center"><input type="checkbox" class="ed-div" value="${d.id}"${inDiv(e, d.id) ? ' checked' : ''}>${d.name.replace('部門', '')}</label>`).join(''),
+        div: DIVISIONS.map((d) => `<label style="display:flex;gap:4px;align-items:center"><input type="checkbox" class="ed-div" value="${d.id}"${inDiv(e, d.id) ? ' checked' : ''}>${divPill(d.id, true)}</label>`).join(''),
         rating: `<input id="ed-rating" type="number" value="${e.rating}" style="width:7em">`,
         frate: `<input id="ed-frate" type="number" step="0.001" value="${e.frate}" style="width:7em">`,
         memo: `<input id="ed-memo" value="${esc(e.memo)}" maxlength="200">`,
@@ -304,7 +304,7 @@ function renderSettingsForm() {
     const dd = defOf(d.id);
     const sec = document.createElement('div');
     sec.className = 'divdef';
-    sec.innerHTML = `<h3>${d.name}</h3><div class="row" style="align-items:start">
+    sec.innerHTML = `<h3>${divPill(d.id)}</h3><div class="row" style="align-items:start">
       <label>自選曲の上限（譜面定数）<input type="number" step="0.1" min="1" max="15" id="dd-${d.id}-cap" data-dd="${d.id}" value="${dd.cap}"></label>
       <div${isMini() ? ' hidden' : ''}><label for="dd-${d.id}-k1">運営課題曲</label><div class="k1"></div></div>
       <div${isMini() ? ' hidden' : ''}><label for="dd-${d.id}-k2">運営課題曲2（同じ曲になったとき用）</label><div class="k2"></div></div></div>`;
@@ -351,7 +351,7 @@ const emptyMatch = (div, a = null, b = null) => {
 };
 
 function divTabs(el, onPick) {
-  el.innerHTML = DIVISIONS.map((d) => `<button type="button" data-div="${d.id}" aria-selected="${d.id === curDiv}">${d.name}（${divMatches(d.id).length}試合）</button>`).join('');
+  el.innerHTML = DIVISIONS.map((d) => `<button type="button" data-div="${d.id}" aria-selected="${d.id === curDiv}">${divPill(d.id)} ${divMatches(d.id).length}試合</button>`).join('');
   el.onclick = (e) => { const b = e.target.closest('[data-div]'); if (!b) return; curDiv = b.dataset.div; onPick(); };
 }
 
@@ -499,7 +499,7 @@ function viewModel() {
   readSettingsForm();
   const ch = (k) => (k && charts?.byKey.get(k)) || null;
   return {
-    title: settings.title, badge: divName(curDiv), notes: settings.notes,
+    title: settings.title, badge: divName(curDiv), badgeColor: DIV_COLOR[curDiv], notes: settings.notes,
     matches: divMatches().map((m) => ({
       aName: nameOf(m.a, 'プレイヤーA'), bName: nameOf(m.b, 'プレイヤーB'),
       aSongs: m.aSongs.map(ch), bSongs: m.bSongs.map(ch), cap: m.cap, lv14: m.lv14,

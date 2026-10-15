@@ -14,6 +14,12 @@ maimai の非公式大会「もぐらたたきカップ」の運営ツールで�
   - 告知画像（組み合わせ発表／選曲公開／BAN結果・対戦曲）を PNG で保存
 - `worker/` … Cloudflare Workers + D1 の API
 
+## デモ
+
+`demo.html` から、参加者ページ・運営ページを本番と同じ動きで試せます（`index.html?demo=1`、`admin.html?demo=1` でも可）。
+本物の `worker/worker.js` を、ブラウザの中のデータベース（`demo/memdb.js`）につないで動かすので、サーバーには何も送りません。
+データはそのブラウザの localStorage にだけ保存され、画面下の操作バーから参加者の切り替え・段階の切り替え・ほかの参加者の自動入力・リセットができます。
+
 ## 申請の設問と部門
 
 参加申請では Q1〜Q13（X の ID、Discord 名、スコアタで使用する名前、部門、レート、2fRATE、神プレート、部門別の質問）を集めます。
@@ -47,6 +53,12 @@ maimai の非公式大会「もぐらたたきカップ」の運営ツールで�
 | 対戦曲確定 | 対戦する3曲を確認 |
 
 ## 設置手順
+
+### v3 から v4 へ更新する場合（2fRATE の値の読み込み）
+
+1. D1 のコンソールで `worker/migrate_v4.sql` を実行する
+2. Worker のコードを新しい `worker/worker.js` に置き換えてデプロイする
+3. 2fRATE の Worker の `check` の返事に、PIN が合っているときだけ `rateFull` と `counts`（star5Mas・star5Remas・star6Mas・star6Remas など）を入れる
 
 ### v2 を設置済みで、申請の設問を追加した版（v3）へ更新する場合
 

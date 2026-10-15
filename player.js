@@ -1,6 +1,6 @@
 // もぐらたたきカップ 参加者ページ
 const $ = (s, r = document) => r.querySelector(s);
-const TOKEN_STORE = 'mogucupdx-session';
+const TOKEN_STORE = window.MOGU_DEMO ? 'mogucupdx-demo-session' : 'mogucupdx-session'; // デモは本番と別に保存
 const PHASE_LABEL = { closed: '組み合わせ発表前', select: '自選曲の提出', ban: 'BAN', pick: '自選曲の決定', done: '対戦曲確定' };
 const PAGE_SIZE = 50;
 
@@ -66,7 +66,7 @@ $('#logout').onclick = async () => {
 };
 
 // ---------- 参加申請 ----------
-$('#divChecks').innerHTML = DIVISIONS.map((d) => `<label><input type="checkbox" name="div" value="${d.id}">${d.name}</label>`).join('');
+$('#divChecks').innerHTML = DIVISIONS.map((d) => `<label><input type="checkbox" name="div" value="${d.id}">${divPill(d.id)}</label>`).join('');
 $('#plateChecks').innerHTML = PLATES.map((p) => `<label><input type="checkbox" name="plate" value="${p}">${p}神</label>`).join('');
 // 神プレート：1つのボタンで全選択／全解除（すべて選ばれているときは「すべて解除」）
 const plateBoxes = () => [...document.querySelectorAll('input[name=plate]')];
@@ -117,17 +117,29 @@ $('#entryForm').addEventListener('submit', async (e) => {
   btn.disabled = false;
 });
 
+// 2fRATE と連携しているユーザーは、2fRATE のレートと☆5・☆6 の達成数を最初から入れておく（空欄のときだけ）
+function prefill2f(p) {
+  if (!p) return;
+  const put = (id, v) => { const x = $('#' + id); if (x && x.value === '' && v != null) { x.value = v; x.classList.add('from2f'); } };
+  put('frate', p.rateFull != null ? Number(p.rateFull).toFixed(3) : null);
+  put('m5', p.star5Mas);
+  put('r5', p.star5Remas);
+  put('s6', p.star6Mas != null && p.star6Remas != null ? p.star6Mas + p.star6Remas : null);
+  $('#from2fNote').hidden = false;
+}
+
 function entryFacts(en) {
   const a = en.answers || {};
   const rows = [
     ['X', '@' + en.xId], ['Discord', a.discord || '-'], ['名前', en.entryName],
-    ['部門', (a.divisions || []).map(divName).join('・') || '-'],
+    ['部門', { html: (a.divisions || []).map((d) => divPill(d)).join(' ') || '-' }],
     ['レート', en.rating], ['2fRATE', Number(en.frate).toFixed(3)],
     ['神プレート', (a.plates || []).map((p) => p + '神').join(' ') || 'なし'],
   ];
-  if (a.lime) rows.push(['らいむ部門', `MAS星5 ${a.lime.m5}・Re:MAS星5 ${a.lime.r5}・星6 ${a.lime.s6}・Lv14 ${a.lime.lv14 ? '希望する' : '希望しない'}`]);
-  if (a.lemon) rows.push(['れもん部門', `Lv14 AP ${a.lemon.ap14}・Lv14+ AP ${a.lemon.ap14p}`]);
-  return rows.map(([k, v]) => `<dt>${k}</dt><dd>${esc(v)}</dd>`).join('');
+  if (a.lime) rows.push([{ html: divPill('lime') }, `MAS星5 ${a.lime.m5}・Re:MAS星5 ${a.lime.r5}・星6 ${a.lime.s6}・Lv14 ${a.lime.lv14 ? '希望する' : '希望しない'}`]);
+  if (a.lemon) rows.push([{ html: divPill('lemon') }, `Lv14 AP ${a.lemon.ap14}・Lv14+ AP ${a.lemon.ap14p}`]);
+  const cell = (v) => (v && v.html !== undefined ? v.html : esc(v));
+  return rows.map(([k, v]) => `<dt>${cell(k)}</dt><dd>${cell(v)}</dd>`).join('');
 }
 
 // ---------- 読み込み ----------
@@ -154,6 +166,7 @@ async function refresh() {
   $('#entryDone').hidden = !en;
   if (!en && !ME.settings.entryOpen) setMsg('参加申請の受付は終了しています', 'err');
   if (en) $('#entryFacts').innerHTML = entryFacts(en);
+  if (!en) prefill2f(ME.user.profile);
   for (const m of ME.matches) {
     drafts[m.id] = m.mySongs.slice();
     choices[m.id] = ME.settings.phase === 'ban' ? m.myBan : ME.settings.phase === 'pick' ? m.myPick : -1;
@@ -208,12 +221,12 @@ function rerender(m) {
 }
 
 function renderMatch(box, m, phase) {
-  box.append(el('h2', '', `${m.divName ? m.divName + '　' : ''}MATCH ${String(m.no).padStart(2, '0')}`));
+  const h = el('h2'); h.innerHTML = `${divPill(m.div)} MATCH ${String(m.no).padStart(2, '0')}`; box.append(h);
   const vs = el('div', 'vs');
   vs.append(el('div', 'nm', ME.entry.entryName), el('div', 'v', 'VS'), el('div', 'nm', m.opponent ? m.opponent.entryName : '（相手未定）'));
   box.append(vs);
   const facts = el('dl', 'facts');
-  facts.innerHTML = `<dt>自選曲の上限</dt><dd>譜面定数 <b>${fmtConst(Number(m.cap))}</b> 以下${m.lv14 ? '<span class="lv14">Lv14 解禁：上限を超えるレベル14を1曲まで</span>' : ''}</dd>${m.opponent ? `<dt>相手の X</dt><dd><a href="https://x.com/${encodeURIComponent(m.opponent.xId)}" target="_blank" rel="noopener">@${esc(m.opponent.xId)}</a></dd>` : ''}`;
+  facts.innerHTML = `<dt>自選曲の上限</dt><dd>譜面定数 <b>${fmtConst(Number(m.cap))}</b> 以下${m.lv14 ? '<span class="lv14">Lv14 解禁：上限を超えるレベル14を1曲まで</span>' : ''}</dd>`;
   box.append(facts);
   if (m.kadai && phase !== 'done') { box.append(el('div', 'slotno', '運営課題曲')); box.append(songEl(m.kadai)); }
 
@@ -263,10 +276,11 @@ function browser(m) {
   const draft = drafts[m.id];
   const wrap = el('div');
   wrap.style.cssText = 'display:grid;gap:10px';
-  const pool = charts.list.filter((c) => selectable(c.c, m.cap, m.lv14) && c.key !== m.kadai);
+  const overUsed = draft.some((k) => { const c = charts.byKey.get(k); return c && overCap(c.c, m.cap); });
+  // Lv14 解禁枠を1曲使ったら、ほかの上限超えの譜面は一覧から外す（選んだ1曲は残す）
+  const pool = charts.list.filter((c) => selectable(c.c, m.cap, m.lv14) && c.key !== m.kadai && !(overUsed && overCap(c.c, m.cap) && !draft.includes(c.key)));
   const levels = [...new Set(pool.map((c) => c.lv))].sort((a, b) => levelOrder(b) - levelOrder(a));
   if (browse.level !== 'all' && !levels.includes(browse.level)) browse.level = 'all';
-  const overUsed = draft.some((k) => { const c = charts.byKey.get(k); return c && overCap(c.c, m.cap); });
 
   const search = el('input', 'search');
   search.type = 'search'; search.id = 'songSearch-' + m.id; search.placeholder = '曲名で絞り込み'; search.value = browse.q;

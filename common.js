@@ -98,7 +98,7 @@ function resolveJacket(map, name, kind, diff, lv) {
   return hits.length === 1 ? hits[0].img : null;
 }
 
-const jacketURL = (img) => (img ? API + 'jacket/' + img : null);
+const jacketURL = (img) => (img ? (window.MOGU_JACKET || API) + 'jacket/' + img : null);
 
 // ひらがな・カタカナ・全角半角・大文字小文字の違いを無視して検索する
 function norm(s) {

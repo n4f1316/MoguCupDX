@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>もぐらたたきカップ</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=M+PLUS+Rounded+1c:wght@500;800&family=Zen+Kaku+Gothic+New:wght@400;700&family=JetBrains+Mono:wght@500&display=swap">
-<link rel="stylesheet" href="common.css?v=20261014e">
+<link rel="stylesheet" href="common.css?v=20261015b">
 <style>
 main{max-width:720px;margin:0 auto;display:grid;gap:16px}
 .hero{display:grid;gap:4px;padding-block:8px}
@@ -73,8 +73,10 @@ fieldset.q legend{padding:0;margin-bottom:4px}
 .checks.plates label{border:1px solid var(--line);border-radius:999px;padding:3px 10px 3px 6px;background:var(--bg)}
 .checks.plates label:has(input:checked){border-color:var(--accent);background:var(--soft)}
 .divq{border-left:3px solid var(--accent);padding-left:12px;display:grid;gap:12px}
-.divq h3{margin:0;font-family:var(--f-display);font-size:1rem;color:var(--accent)}
+.divq h3{margin:0;font-family:var(--f-display);font-size:1rem}
 .lv14{display:inline-block;font-size:11px;font-weight:800;padding:2px 8px;border-radius:999px;background:#fff3d6;color:#8a5a00;margin-left:6px}
+.from2f{background:#eef7e0;border-color:#9ccc65}
+.from2fNote{background:#eef7e0;border-radius:8px;padding:8px 10px;color:var(--fg)}
 .hp{position:absolute;left:-9999px;width:1px;height:1px;overflow:hidden}
 .foot{font-size:12px;color:var(--muted);line-height:1.8}
 @media (max-width:520px){.srow{grid-template-columns:40px minmax(0,1fr)}.srow .go{display:none}.jk{width:40px;height:40px}.song{grid-template-columns:40px minmax(0,1fr) auto}}
@@ -122,6 +124,7 @@ fieldset.q legend{padding:0;margin-bottom:4px}
   <!-- 参加申請 -->
   <form class="panel" id="entryForm" hidden novalidate>
     <h2>参加申請</h2>
+    <p class="note from2fNote" id="from2fNote" hidden>2fRATE に登録されている値を、2fRATE・☆5・☆6 の欄にあらかじめ入れています（色の付いた欄）。違っていれば書き直してください。</p>
     <label class="q"><span><b>Q1.</b> あなたの X（Twitter）の ID を教えてください <i>必須</i></span>
       <input id="xId" type="text" maxlength="16" placeholder="記入例：@Porto_mint" autocapitalize="off" spellcheck="false">
     </label>
@@ -148,7 +151,7 @@ fieldset.q legend{padding:0;margin-bottom:4px}
       <div class="checks plates" id="plateChecks"></div>
     </fieldset>
     <div class="divq" id="qLime" hidden>
-      <h3>らいむ部門</h3>
+      <h3><span class="divpill lime">らいむ部門</span></h3>
       <div class="row">
         <label class="q"><span><b>Q8.</b> MASTER の星5達成譜面数 <i>必須</i></span><input id="m5" type="number" inputmode="numeric" min="0" step="1"></label>
         <label class="q"><span><b>Q9.</b> Re:MASTER の星5達成譜面数 <i>必須</i></span><input id="r5" type="number" inputmode="numeric" min="0" step="1"></label>
@@ -160,7 +163,7 @@ fieldset.q legend{padding:0;margin-bottom:4px}
       </fieldset>
     </div>
     <div class="divq" id="qLemon" hidden>
-      <h3>れもん部門</h3>
+      <h3><span class="divpill lemon">れもん部門</span></h3>
       <div class="row">
         <label class="q"><span><b>Q12.</b> レベル14の AP 達成譜面数 <i>必須</i></span><input id="ap14" type="number" inputmode="numeric" min="0" step="1"></label>
         <label class="q"><span><b>Q13.</b> レベル14+の AP 達成譜面数 <i>必須</i></span><input id="ap14p" type="number" inputmode="numeric" min="0" step="1"></label>
@@ -182,8 +185,8 @@ fieldset.q legend{padding:0;margin-bottom:4px}
   <p class="foot">非公式のファンメイドツールです。株式会社セガおよび関連会社とは一切関係ありません。楽曲・ジャケット画像の著作権は、株式会社セガおよび各権利者に帰属します。</p>
 </main>
 
-<script src="config.js?v=20261014e"></script>
-<script src="common.js?v=20261014e"></script>
-<script src="player.js?v=20261014e"></script>
+<script src="config.js?v=20261015b"></script>
+<script src="common.js?v=20261015b"></script>
+<script src="player.js?v=20261015b"></script>
 </body>
 </html>

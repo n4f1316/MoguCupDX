@@ -32,11 +32,7 @@ const DrawKit = (() => {
   }
   function base(h, heading) {
     cv.width = W; cv.height = h;
-    const g = ctx.createLinearGradient(0, 0, 0, h);
-    g.addColorStop(0, C.bg1); g.addColorStop(1, C.bg2);
-    ctx.fillStyle = g; ctx.fillRect(0, 0, W, h);
-    ctx.fillStyle = C.hole; // もぐらの穴
-    for (let y = 60; y < h; y += 150) for (let x = (y / 150) % 2 ? 40 : 115; x < W; x += 150) { ctx.beginPath(); ctx.ellipse(x, y, 46, 16, 0, 0, Math.PI * 2); ctx.fill(); }
+    ctx.fillStyle = C.bg1; ctx.fillRect(0, 0, W, h);
     // 大会アイコンを薄く（85% 透過）背景に敷く
     if (logo) {
       const size = Math.min(h - 60, 920);
@@ -51,8 +47,8 @@ const DrawKit = (() => {
     if (V.badge) { // 右上の丸いラベル：部門名
       ctx.font = `800 34px ${FD}`;
       const tw = Math.min(ctx.measureText(V.badge).width + 56, 420);
-      rr(W - 80 - tw, 112, tw, 64, 32); ctx.fillStyle = C.accent; ctx.fill();
-      fit(V.badge, W - 80 - tw / 2, 156, tw - 40, 34, 800, FD, 'center', C.onAccent);
+      rr(W - 80 - tw, 112, tw, 64, 32); ctx.fillStyle = V.badgeColor || C.accent; ctx.fill();
+      fit(V.badge, W - 80 - tw / 2, 156, tw - 40, 34, 800, FD, 'center', V.badgeColor ? C.fg : C.onAccent);
     }
     ctx.fillStyle = C.mute; ctx.globalAlpha = 0.35; ctx.fillRect(80, 206, W - 160, 2); ctx.globalAlpha = 1;
   }

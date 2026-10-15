@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="robots" content="noindex">
+<title>もぐらたたきカップ デモ</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=M+PLUS+Rounded+1c:wght@500;800&family=Zen+Kaku+Gothic+New:wght@400;700&display=swap">
+<link rel="stylesheet" href="common.css?v=20261015b">
+<style>
+main{max-width:720px;margin:0 auto;display:grid;gap:16px}
+.hero{display:flex;gap:16px;align-items:center}
+.hero img{width:88px;height:88px;flex:none}
+.eyebrow{font-size:12px;letter-spacing:.08em;color:var(--accent);font-weight:700}
+ol{margin:0;padding-left:1.4em;display:grid;gap:10px}
+ol li b{color:var(--accent)}
+.cta{display:flex;flex-wrap:wrap;gap:8px}
+.cta a{display:inline-block;padding:9px 16px;border-radius:8px;text-decoration:none;font-weight:700;border:1px solid var(--line);background:var(--soft);color:var(--fg)}
+.cta a.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-fg)}
+table{border-collapse:collapse;font-size:14px;width:100%}
+td,th{border-bottom:1px solid var(--line);padding:6px 8px;text-align:left}
+.tw{overflow-x:auto}
+</style>
+</head>
+<body>
+<main>
+  <header class="hero">
+    <img src="logo3rd.svg?v=1" alt="">
+    <div>
+      <span class="eyebrow">ツールのデモ</span>
+      <h1>もぐらたたきカップ デモ</h1>
+    </div>
+  </header>
+
+  <section class="panel">
+    <p style="margin:0">本番と同じ参加者ページ・運営ページを、このブラウザの中だけで動かします。入力した内容はサーバーには送られず、本番のデータにも影響しません。</p>
+    <div class="cta">
+      <a class="primary" href="admin.html?demo=1">運営ページから始める</a>
+      <a href="index.html?demo=1">参加者ページから始める</a>
+    </div>
+    <p class="note">画面の下に、デモ用の操作バーが出ます。参加者の切り替え、段階の切り替え、ほかの参加者の提出の自動入力、最初からのやり直しができます。</p>
+  </section>
+
+  <section class="panel">
+    <h2>流れを一通り試す手順</h2>
+    <ol>
+      <li><b>参加申請</b>：参加者ページで「新規登録」してから申請してみます（ユーザー名と PIN は何でも可）。デモ用の参加者が最初から9人いるので、申請しなくても進められます。</li>
+      <li><b>組み合わせ</b>：運営ページの「組み合わせ・選曲」で部門を選び、「2fRATE順にペアを作る」→「設定と組み合わせを保存」。らいむ部門では、両者が Lv14 を希望した試合が自動で解禁されます。</li>
+      <li><b>自選曲の提出</b>：バーの「次の段階へ」で「自選曲の提出」にし、「参加者として見る」で参加者を選んで、楽曲一覧から3曲選んで提出します。ほかの参加者の分は「ほかの参加者の提出を自動で埋める」で入ります。</li>
+      <li><b>BAN</b>：「次の段階へ」で BAN にすると、相手の自選曲が見えるようになります。1曲を BAN して提出します。</li>
+      <li><b>自選曲の決定</b>：もう一度「次の段階へ」。BAN されなかった2曲から1曲を決めます。</li>
+      <li><b>対戦曲確定</b>：最後に「次の段階へ」。参加者ページに対戦曲が出ます。運営ページの「告知画像」で、組み合わせ発表・選曲公開・BAN結果の画像を作れます。</li>
+    </ol>
+  </section>
+
+  <section class="panel">
+    <h2>デモ用のアカウント</h2>
+    <div class="tw"><table>
+      <tr><th>使い方</th><th>ユーザー名</th><th>PIN</th></tr>
+      <tr><td>デモ用の参加者（9人）</td><td>demo_mogura など（操作バーから切り替え）</td><td>0000</td></tr>
+      <tr><td>2fRATE 連携のログインを試す</td><td>porto_mint</td><td>1234</td></tr>
+      <tr><td>運営ページ</td><td colspan="2">鍵は自動で入ります（demo）</td></tr>
+    </table></div>
+  </section>
+</main>
+</body>
+</html>
