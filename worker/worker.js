@@ -1,8 +1,8 @@
 // もぐらたたきカップ API（Cloudflare Workers + D1）
 //
 // 公開:
+//   GET  /jacket/<file>.png          ジャケット画像の表示用の中継（?debug=1 で取得先ごとの結果）
 //   GET  /api/public                 大会設定のうち公開してよい項目と申請人数
-//   GET  /jacket/<file>.png          ジャケット画像の中継（画像に描き込めるよう CORS を付ける）
 // 参加者（ログイン。Authorization: Bearer <セッション>）:
 //   POST /api/auth/register          { username, pin }  新規登録（2fRATE のユーザー名なら 2fRATE と連携）
 //   POST /api/auth/login             { username, pin }  ログイン（2fRATE の ID・PIN でも可）
@@ -24,9 +24,13 @@
 // 設定: D1 バインディング DB、シークレット ADMIN_KEY、変数 ALLOWED_ORIGINS
 // 任意: サービスバインディング RATE2F（2fRATE の Worker）。無ければ RATE2F_URL に直接送る
 
+// ジャケットの取得先（上から順に試す）。
+// maimaidx.jp は証明書の都合で Worker からの https が失敗する（526）ため、http も試す。
+// 公式で取れないときは、同じファイル名の国際版の公式サイトを使う。
 const JACKET_BASES = [
   'https://maimaidx.jp/maimai-mobile/img/Music/',
-  'https://maimai.sega.jp/storage/DX_jacket/',
+  'http://maimaidx.jp/maimai-mobile/img/Music/',
+  'https://maimaidx-eng.com/maimai-mobile/img/Music/',
 ];
 const CONSTS_URL = 'https://n4f1316.github.io/dxscore-tools/maimai_consts_magical.json';
 const RATE2F_URL = 'https://2frate.want131611.workers.dev/';
@@ -50,7 +54,7 @@ const DEFAULT_SETTINGS = {
     final: '対戦曲は自選曲・他選曲・運営課題曲の3曲です',
   },
 };
-const PUBLIC_KEYS = ['title', 'round', 'entryOpen', 'entryDeadline', 'notice', 'phase', 'phaseNote', 'format'];
+const PUBLIC_KEYS = ['title', 'round', 'entryOpen', 'entryDeadline', 'notice', 'phase', 'phaseNote', 'format', 'notes'];
 
 export default {
   async fetch(req, env) {
@@ -71,9 +75,9 @@ export default {
 
 async function route(req, env, url) {
   const p = url.pathname.replace(/\/+$/, '') || '/';
+  if (req.method === 'GET' && p.startsWith('/jacket/')) return jacket(p.slice(8), url);
   const m = req.method;
 
-  if (m === 'GET' && p.startsWith('/jacket/')) return jacket(p.slice(8));
   if (m === 'GET' && p === '/api/public') {
     const s = await getSettings(env);
     const { n } = await env.DB.prepare('SELECT COUNT(*) AS n FROM entries').first();
@@ -508,17 +512,52 @@ function publicSettings(s) {
   return { ...Object.fromEntries(PUBLIC_KEYS.map((k) => [k, s[k]])), entryOpen: isOpen(s) };
 }
 
-async function jacket(file) {
-  if (!/^[0-9a-f]{16}\.png$/.test(file)) return new Response('bad name', { status: 400 });
+// 公式の画像を表示用に中継する（スマホのブラウザでは maimaidx.jp の画像を直接読めないことがあるため）。
+// 画像は保存・公開せず、取れたものを Cloudflare に一時的にキャッシュするだけ。
+// 公式サイトはブラウザ以外からのアクセスを断ることがあるので、ブラウザと同じ見出しを付ける。
+// 失敗（404・403 など）はキャッシュしない（以前は失敗もキャッシュされ、一部の曲が「?」のままになっていた）。
+// 末尾に ?debug=1 を付けると、各取得先の結果を JSON で返す。
+const JACKET_HEADERS = {
+  'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/129.0.0.0 Safari/537.36',
+  'Accept': 'image/avif,image/webp,image/apng,image/*,*/*;q=0.8',
+  'Accept-Language': 'ja,en;q=0.8',
+};
+async function jacket(file, url) {
+  const cors = { 'Access-Control-Allow-Origin': '*' };
+  if (!/^[0-9a-f]{16}\.png$/.test(file)) return new Response('bad name', { status: 400, headers: cors });
+  const debug = url.searchParams.has('debug');
+  const cache = globalThis.caches?.default;
+  const cacheKey = new Request('https://jacket-cache.invalid/' + file);
+  if (cache && !debug) {
+    const hit = await cache.match(cacheKey);
+    if (hit) return new Response(hit.body, hit); // ヘッダーを書き換えられる形にして返す
+  }
+  const tried = [];
   for (const base of JACKET_BASES) {
-    const r = await fetch(base + file, { cf: { cacheEverything: true, cacheTtl: 60 * 60 * 24 * 30 } }).catch(() => null);
-    if (r?.ok) {
-      return new Response(r.body, {
-        headers: { 'Content-Type': 'image/png', 'Cache-Control': 'public, max-age=2592000', 'Access-Control-Allow-Origin': '*' },
+    const referer = new URL(base).origin + '/';
+    let r = null;
+    try {
+      r = await fetch(base + file, {
+        headers: { ...JACKET_HEADERS, Referer: referer },
+        cf: { cacheTtlByStatus: { '200-299': 60 * 60 * 24 * 30, '300-599': 0 } },
       });
+    } catch (e) {
+      tried.push({ base, error: String(e) });
+      continue;
+    }
+    const type = r.headers.get('Content-Type') || '';
+    tried.push({ base, status: r.status, type, ...(r.redirected ? { to: r.url } : {}) });
+    if (r.ok && type.startsWith('image/')) {
+      if (debug) continue;
+      const res = new Response(r.body, {
+        headers: { 'Content-Type': type, 'Cache-Control': 'public, max-age=2592000', ...cors },
+      });
+      if (cache) await cache.put(cacheKey, res.clone()).catch(() => {});
+      return res;
     }
   }
-  return new Response('not found', { status: 404, headers: { 'Access-Control-Allow-Origin': '*' } });
+  if (debug) return new Response(JSON.stringify({ file, tried }, null, 2), { headers: { 'Content-Type': 'application/json', ...cors } });
+  return new Response('not found', { status: 404, headers: { 'Cache-Control': 'no-store', ...cors } });
 }
 
 async function requireAdmin(req, env) {
