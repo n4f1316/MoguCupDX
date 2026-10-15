@@ -59,9 +59,15 @@ var DrawKit = window.DrawKit || (() => {
     while (ctx.measureText(text).width > maxW && s > 14) { s -= 1; ctx.font = `${weight} ${s}px ${font}`; }
     ctx.fillStyle = color; ctx.textAlign = align; ctx.fillText(text, x, y);
   }
+  // 画像の一番下に、権利表記の帯（高さ CREDIT_H）を足す
+  const CREDIT_H = 52;
+  const CREDIT = '本大会は有志による非公式大会です。楽曲・ジャケット画像の著作権は、株式会社セガおよび各権利者に帰属します。';
   function base(h, heading) {
-    cv.width = W; cv.height = h;
-    ctx.fillStyle = C.bg1; ctx.fillRect(0, 0, W, h);
+    cv.width = W; cv.height = h + CREDIT_H;
+    ctx.fillStyle = C.bg1; ctx.fillRect(0, 0, W, h + CREDIT_H);
+    ctx.fillStyle = C.bg2; ctx.fillRect(0, h, W, CREDIT_H);
+    ctx.textBaseline = 'alphabetic';
+    fit(CREDIT, W / 2, h + 33, W - 160, 20, 500, FB, 'center', C.mute);
     // 大会アイコンを薄く（85% 透過）背景に敷く
     if (logo) {
       const size = Math.min(h - 60, 920);
@@ -81,14 +87,8 @@ var DrawKit = window.DrawKit || (() => {
     }
     ctx.fillStyle = C.mute; ctx.globalAlpha = 0.35; ctx.fillRect(80, 206, W - 160, 2); ctx.globalAlpha = 1;
   }
-  // 右下に権利表記、左下に運営の一言
-  const CREDIT = '非公式大会 ／ 楽曲・ジャケット © SEGA';
-  function footer(h, text) {
-    ctx.font = `700 20px ${FB}`;
-    const cw = ctx.measureText(CREDIT).width;
-    fit(CREDIT, W - 80, h - 34, cw, 20, 700, FB, 'right', C.mute);
-    if (text) fit(text, 80, h - 34, W - 160 - cw - 32, 26, 700, FB, 'left', C.mute);
-  }
+  // 左下に運営の一言（権利表記は一番下の帯）
+  function footer(h, text) { if (text) fit(text, 80, h - 34, W - 160, 26, 700, FB, 'left', C.mute); }
   const label = (n) => 'MATCH ' + String(n).padStart(2, '0');
 
   // 譜面カード（ジャケット・難易度・定数・曲名）
