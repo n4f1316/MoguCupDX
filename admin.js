@@ -523,14 +523,24 @@ async function renderImage() {
   imgIdx = Math.min(imgIdx, Math.max(0, ms.length - 1));
   $('#imgMatch').innerHTML = ms.map((m, i) => `<option value="${i}"${i === imgIdx ? ' selected' : ''}>MATCH ${String(i + 1).padStart(2, '0')}　${esc(nameOf(m.a, 'A'))} vs ${esc(nameOf(m.b, 'B'))}</option>`).join('');
   const seq = ++renderSeq;
-  // プレビューは画面の canvas に直接描く（ジャケットは公式から表示用に読む。保存は別の canvas で行う）
+  if (!per) {
+    // 組み合わせ発表はジャケットを使わないので画像にして表示する（長押し・右クリックで保存できる）
+    await DrawKit.render($('#cv'), viewModel(), kind, imgIdx);
+    if (seq !== renderSeq) return;
+    $('#out').src = $('#cv').toDataURL('image/png');
+    $('#out').hidden = false; $('#pv').hidden = true;
+    $('#imgNote').textContent = '画像を長押し（パソコンは右クリック）でも保存できます';
+    return;
+  }
+  // 選曲公開・対戦曲は画面の canvas に直接描く（ジャケットは公式から表示用に読む。この画面からは保存できない）
   const pv = document.createElement('canvas');
   await DrawKit.render(pv, viewModel(), kind, imgIdx, { preview: true });
   if (seq !== renderSeq) return;
   const out = $('#pv');
   out.width = pv.width; out.height = pv.height;
   out.getContext('2d').drawImage(pv, 0, 0);
-  $('#imgNote').textContent = per ? 'プレビューです。ジャケット入りの画像の保存はブックマークで行います' : '';
+  $('#out').hidden = true; out.hidden = false;
+  $('#imgNote').textContent = 'プレビューです。ジャケット入りの画像の保存はブックマークで行います';
 }
 
 // 告知画像用ブックマーク：maimaidx.jp の上で bookmark-image.js を読み込む

@@ -73,6 +73,7 @@
       <div class="row" id="kinds"></div>
       <div class="row"><select id="match" aria-label="対象の試合"></select><button type="button" id="redo">データを貼り直す</button></div>
       <div class="out"><img id="out" alt="告知画像"></div>
+      <p class="note">画像を長押し（パソコンは右クリック）でも保存できます。</p>
       <div class="row"><button type="button" class="primary" id="dlOne">この画像を保存</button><button type="button" id="dlAll">全試合ぶん保存</button></div>
     </section>
     <p class="msg" id="msg" role="status" aria-live="polite"></p>

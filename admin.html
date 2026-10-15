@@ -6,7 +6,7 @@
 <meta name="robots" content="noindex">
 <title>もぐらたたきカップ 運営</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=M+PLUS+Rounded+1c:wght@500;800&family=Zen+Kaku+Gothic+New:wght@400;700&family=JetBrains+Mono:wght@500&display=swap">
-<link rel="stylesheet" href="common.css?v=20261015f">
+<link rel="stylesheet" href="common.css?v=20261015g">
 <style>
 main{max-width:1280px;margin:0 auto;display:grid;gap:16px}
 .top{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:8px 16px}
@@ -49,7 +49,7 @@ td input{padding:3px 6px;font-size:14px}
 /* 告知画像 */
 .imggrid{display:grid;grid-template-columns:minmax(0,1fr);gap:12px}
 .canvasbox{border:1px solid var(--line);border-radius:8px;overflow:hidden;background:var(--soft)}
-.canvasbox canvas{display:block;width:100%;height:auto}
+.canvasbox canvas,.canvasbox img{display:block;width:100%;height:auto}
 #login{max-width:420px}
 .bmbox{border-top:1px solid var(--line);padding-top:12px;display:grid;gap:8px}
 .bmbox h2{margin:0}
@@ -157,7 +157,7 @@ td input{padding:3px 6px;font-size:14px}
         </div>
         <label id="imgMatchWrap" hidden style="min-width:240px">対象の試合<select id="imgMatch"></select></label>
       </div>
-      <div class="canvasbox"><canvas id="pv" role="img" aria-label="告知画像のプレビュー"></canvas></div>
+      <div class="canvasbox"><img id="out" alt="告知画像" hidden><canvas id="pv" role="img" aria-label="告知画像のプレビュー"></canvas></div>
       <div class="btns">
         <button class="primary" id="copyData" type="button">画像用データをコピー（この部門）</button>
         <button id="dlOne" type="button">この画像を保存</button>
@@ -184,9 +184,9 @@ td input{padding:3px 6px;font-size:14px}
 </main>
 <canvas id="cv" hidden></canvas>
 
-<script src="config.js?v=20261015f"></script>
-<script src="common.js?v=20261015f"></script>
-<script src="draw.js?v=20261015f"></script>
-<script src="admin.js?v=20261015f"></script>
+<script src="config.js?v=20261015g"></script>
+<script src="common.js?v=20261015g"></script>
+<script src="draw.js?v=20261015g"></script>
+<script src="admin.js?v=20261015g"></script>
 </body>
 </html>
