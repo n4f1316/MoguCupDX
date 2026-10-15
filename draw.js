@@ -23,6 +23,19 @@ const DrawKit = (() => {
     return imgCache.get(url);
   }
 
+  // ジャケット：まず Worker 経由、だめなら公式から直接（CORS が許可されていれば描ける）
+  const DIRECT_BASES = ['https://maimaidx.jp/maimai-mobile/img/Music/', 'https://maimai.sega.jp/storage/DX_jacket/'];
+  async function loadJacket(img) {
+    if (!img) return null;
+    const viaWorker = await loadImg(jacketURL(img) + '?r=2');
+    if (viaWorker) return viaWorker;
+    for (const base of DIRECT_BASES) {
+      const im = await loadImg(base + img);
+      if (im) return im;
+    }
+    return null;
+  }
+
   function rr(x, y, w, h, r) { ctx.beginPath(); ctx.roundRect(x, y, w, h, r); }
   function fit(text, x, y, maxW, size, weight, font, align = 'left', color = C.fg) {
     let s = size;
@@ -173,7 +186,7 @@ const DrawKit = (() => {
     if (!m) { base(400, '対戦カードがありません'); return; }
     const charts = [...m.aSongs, ...m.bSongs, ...(kind === 'final' ? m.finals.map((f) => f.s) : [])].filter(Boolean);
     const imgs = new Map();
-    await Promise.all(charts.map(async (s) => imgs.set(s.key, await loadImg(jacketURL(s.img)))));
+    await Promise.all(charts.map(async (s) => imgs.set(s.key, await loadJacket(s.img))));
     if (kind === 'reveal') drawReveal(m, idx, imgs); else drawFinal(m, idx, imgs);
   }
   return { render };
