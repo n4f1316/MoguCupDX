@@ -496,8 +496,8 @@ $('#pairRandom').onclick = pairAction($('#pairRandom'), () => {
 
 // ---------- 告知画像（部門ごと・両部門） ----------
 let kind = 'pair';
-let imgDivSel = null;   // 'lime' | 'lemon' | 'both'（null のときは組み合わせタブの部門）
-let imgSel = '';        // 'all'（全試合）または '部門:番号'
+let imgDivSel = 'both'; // 'lime' | 'lemon' | 'both'（最初は両部門）
+let imgSel = 'all';     // 'all'（全試合。最初はこれ）または '部門:番号'
 const imgDivs = () => (imgDivSel === 'both' ? DIVISIONS.map((d) => d.id) : [imgDivSel || curDiv]);
 function viewModel(div = curDiv) {
   readSettingsForm();
