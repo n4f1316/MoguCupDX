@@ -229,11 +229,44 @@ function renderMatch(box, m, phase) {
   facts.innerHTML = `<dt>自選曲の上限</dt><dd>譜面定数 <b>${fmtConst(Number(m.cap))}</b> 以下${m.lv14 ? '<span class="lv14">Lv14 解禁：上限を超えるレベル14を1曲まで</span>' : ''}</dd>`;
   box.append(facts);
   if (m.kadai && phase !== 'done') { box.append(el('div', 'slotno', '運営課題曲')); box.append(songEl(m.kadai)); }
+  const img = matchImage(m, phase);
+  if (img) box.append(img);
 
   if (phase === 'select') renderSelect(box, m);
   else if (phase === 'ban') renderBan(box, m);
   else if (phase === 'pick') renderPick(box, m);
   else if (phase === 'done') renderDone(box, m);
+}
+
+// 運営の告知画像と同じ形の表示（BAN の段階から：選曲公開、確定後：BAN結果・対戦曲）。表示だけで保存はしない
+const imgCache = new Map();
+function matchImage(m, phase) {
+  const kind = phase === 'done' ? 'final' : phase === 'ban' || phase === 'pick' ? 'reveal' : null;
+  if (!kind || !window.DrawKit || m.mySongs.length !== 3 || !m.oppSongs || m.oppSongs.length !== 3) return null;
+  const ch = (k) => (k && charts?.byKey.get(k)) || null;
+  const meName = ME.entry.entryName, opName = m.opponent?.entryName || '相手';
+  const done = kind === 'final';
+  const myPick = done ? m.myPick : -1, opPick = done && m.oppPick != null ? m.oppPick : -1;
+  const match = {
+    aName: meName, bName: opName,
+    aSongs: m.mySongs.map(ch), bSongs: m.oppSongs.map(ch), cap: m.cap, lv14: m.lv14,
+    aBan: done ? (m.bannedMine ?? -1) : -1, bBan: done ? m.myBan : -1, aPick: myPick, bPick: opPick,
+    finals: finalSongs({
+      format: ME.settings.format, kadai: m.kadai, kadai2: m.kadai2, aName: meName, bName: opName,
+      aKey: myPick >= 0 ? m.mySongs[myPick] : '', bKey: opPick >= 0 ? m.oppSongs[opPick] : '',
+    }).map((f) => ({ ...f, s: ch(f.key) })),
+  };
+  const matches = []; matches[m.no - 1] = match; // 画像の MATCH 番号を合わせる
+  const view = { title: ME.settings.title, badge: divName(m.div), badgeColor: DIV_COLOR[m.div], notes: ME.settings.notes || {}, matches };
+  const key = JSON.stringify([kind, match, view.title, view.notes]);
+  const wrap = el('div', 'matchimg');
+  if (imgCache.has(key)) { wrap.append(imgCache.get(key)); return wrap; }
+  const cv = document.createElement('canvas');
+  cv.setAttribute('role', 'img');
+  cv.setAttribute('aria-label', kind === 'final' ? '対戦曲の画像' : '選曲公開の画像');
+  wrap.append(cv);
+  DrawKit.render(cv, view, kind, m.no - 1, { preview: true }).then(() => imgCache.set(key, cv)).catch(() => wrap.remove());
+  return wrap;
 }
 
 function submitBtn(label, enabled, fn) {
