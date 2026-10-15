@@ -2,7 +2,9 @@
 // 運営ページ（プレビュー、ジャケットなし）と、maimaidx.jp 上で動く告知画像用ブックマーク（ジャケットあり）の両方で使う。
 // ブックマークでは common.js を読まないので、必要な値はここに持つ。
 var DrawKit = window.DrawKit || (() => {
-  const DIFF_COLOR = { BASIC: '#2e9e5b', ADVANCED: '#c98200', EXPERT: '#e0434b', MASTER: '#8e44d6', 'Re:MASTER': '#a679e0' };
+  // 難易度・種別の色と略称は 2fRATE と同じ
+  const DIFF_COLOR = { BASIC: '#2E9E5B', ADVANCED: '#D98E04', EXPERT: '#E0434B', MASTER: '#8E44D6', 'Re:MASTER': '#B68BE0' };
+  const DIFF_SHORT = { BASIC: 'BAS', ADVANCED: 'ADV', EXPERT: 'EXP', MASTER: 'MAS', 'Re:MASTER': 'Re:MAS' };
   const fmtConst = (c) => (Math.round(c * 10) / 10).toFixed(1);
   const C = { bg1: '#f6f9fd', bg2: '#e4eef8', hole: 'rgba(42,111,184,.06)', card: '#ffffff', card2: '#eef5fc', fg: '#1f2d3d', mute: '#5b6f86', accent: '#2a6fb8', ban: '#d93a49', gold: '#f0b429', goldText: '#9a6400', jk: '#dbe7f3', line: '#d6e2ee', onAccent: '#ffffff' };
   const FD = '"M PLUS Rounded 1c","Hiragino Maru Gothic ProN",sans-serif';
@@ -90,6 +92,70 @@ var DrawKit = window.DrawKit || (() => {
   const label = (n) => 'MATCH ' + String(n).padStart(2, '0');
 
   // 譜面カード（ジャケット・難易度・定数・曲名）
+  // 2fRATE と同じ形のチップ：[MAS] [ST] [13.7]
+  function chips(s, x, y, room) {
+    const items = [
+      { t: DIFF_SHORT[s.diff] || s.diff, bg: s.diff === 'Re:MASTER' ? '#ffffff' : DIFF_COLOR[s.diff] || C.mute, fg: s.diff === 'Re:MASTER' ? '#8E44D6' : '#ffffff', border: s.diff === 'Re:MASTER' ? '#B68BE0' : null },
+      { t: s.kind, bg: s.kind === 'DX' ? 'dx' : '#3B82C4', fg: '#ffffff' },
+      { t: fmtConst(s.c), bg: '#EFECF9', fg: C.fg },
+    ];
+    let fs = 22;
+    const pad = () => Math.round(fs * 0.45), gap = () => Math.round(fs * 0.3);
+    const widths = () => items.map((it) => { ctx.font = `800 ${fs}px ${FM}`; return ctx.measureText(it.t).width + pad() * 2; });
+    let ws = widths();
+    while (ws.reduce((a, b) => a + b, 0) + gap() * 2 > room && fs > 14) { fs--; ws = widths(); }
+    const h = Math.round(fs * 1.5);
+    let cx = x;
+    items.forEach((it, i) => {
+      rr(cx, y, ws[i], h, 7);
+      if (it.bg === 'dx') { const g = ctx.createLinearGradient(cx, 0, cx + ws[i], 0); g.addColorStop(0, '#E0348C'); g.addColorStop(1, '#F29A2E'); ctx.fillStyle = g; } else ctx.fillStyle = it.bg;
+      ctx.fill();
+      if (it.border) { ctx.lineWidth = 2; ctx.strokeStyle = it.border; ctx.stroke(); }
+      ctx.font = `800 ${fs}px ${FM}`; ctx.fillStyle = it.fg; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillText(it.t, cx + ws[i] / 2, y + h / 2 + 1);
+      ctx.textBaseline = 'alphabetic';
+      cx += ws[i] + gap();
+    });
+  }
+
+  // 文字列を幅 maxW で折り返す（英単語の途中ではなるべく切らない）
+  function wrap(text, maxW) {
+    const tokens = String(text).match(/[A-Za-z0-9'’.,!?&:;()\[\]-]+\s*|\s+|./gu) || [];
+    const lines = [];
+    let cur = '';
+    for (const tk of tokens) {
+      if (ctx.measureText(cur + tk).width <= maxW) { cur += tk; continue; }
+      if (cur.trim()) { lines.push(cur.trimEnd()); cur = ''; }
+      if (ctx.measureText(tk).width <= maxW) { cur = tk.trimStart(); continue; }
+      for (const ch of tk) { // 1語が長すぎるときは文字の途中で切る
+        if (ctx.measureText(cur + ch).width > maxW && cur) { lines.push(cur); cur = ''; }
+        cur += ch;
+      }
+    }
+    if (cur.trim()) lines.push(cur.trimEnd());
+    return lines;
+  }
+  function title(text, x, top, maxW, maxH, color) {
+    let fs = 36, lines;
+    for (; fs >= 16; fs--) {
+      ctx.font = `700 ${fs}px ${FB}`;
+      lines = wrap(text, maxW);
+      if (lines.length * fs * 1.22 <= maxH) break;
+    }
+    const lh = fs * 1.22;
+    const maxLines = Math.max(1, Math.floor(maxH / lh));
+    if (lines.length > maxLines) {
+      lines = lines.slice(0, maxLines);
+      let last = lines[maxLines - 1];
+      while (last && ctx.measureText(last + '…').width > maxW) last = last.slice(0, -1);
+      lines[maxLines - 1] = last + '…';
+    }
+    ctx.fillStyle = color; ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
+    // 縦方向は残りの高さの中で下寄せ（1行のときはこれまでと同じ位置）
+    const y0 = top + maxH - lines.length * lh + fs * 0.95;
+    lines.forEach((ln, i) => ctx.fillText(ln, x, y0 + i * lh));
+  }
+
   function songCard(s, x, y, w, h, opt = {}) {
     rr(x, y, w, h, 14); ctx.fillStyle = opt.hi ? C.card2 : C.card; ctx.fill();
     if (opt.hi) { ctx.lineWidth = 4; ctx.strokeStyle = C.gold; ctx.stroke(); } else { ctx.lineWidth = 1.5; ctx.strokeStyle = C.line; ctx.stroke(); }
@@ -103,28 +169,15 @@ var DrawKit = window.DrawKit || (() => {
     else { ctx.font = `800 ${js * 0.3}px ${FD}`; ctx.fillStyle = C.mute; ctx.textAlign = 'center'; ctx.fillText('?', jx + js / 2, jy + js * 0.62); }
     ctx.restore();
     const tx = jx + js + 22, tw = x + w - tx - 20;
-    if (s) {
-      // 難易度・レベル・定数・DX/ST。幅が足りなければ文字を小さくする
-      const meta = `${s.diff}  Lv.${s.lv}  (${fmtConst(s.c)})`;
-      const room = tw - (opt.tag ? 150 : 0);
-      let fs = 22, mw, kw;
-      for (; fs >= 14; fs--) {
-        ctx.font = `500 ${fs}px ${FM}`; mw = ctx.measureText(meta).width;
-        ctx.font = `800 ${fs - 4}px ${FM}`; kw = ctx.measureText(s.kind).width + 16;
-        if (mw + 14 + kw <= room) break;
-      }
-      ctx.font = `500 ${fs}px ${FM}`; ctx.textAlign = 'left'; ctx.fillStyle = dc;
-      ctx.fillText(meta, tx, y + 42);
-      rr(tx + mw + 14, y + 42 - fs + 1, kw, fs + 4, 6); ctx.fillStyle = s.kind === 'DX' ? '#f6a23a' : '#4aa3e8'; ctx.fill();
-      ctx.font = `800 ${fs - 4}px ${FM}`; ctx.fillStyle = '#ffffff'; ctx.textAlign = 'center'; ctx.fillText(s.kind, tx + mw + 14 + kw / 2, y + 41);
-    }
+    if (s) chips(s, tx, y + 14, tw - (opt.tag ? 150 : 0));
     if (opt.tag) {
       ctx.font = `800 22px ${FD}`;
       const tgw = ctx.measureText(opt.tag).width + 28;
       rr(x + w - tgw - 16, y + 14, tgw, 36, 18); ctx.fillStyle = C.gold; ctx.fill();
       ctx.fillStyle = C.fg; ctx.textAlign = 'center'; ctx.fillText(opt.tag, x + w - 16 - tgw / 2, y + 40);
     }
-    fit(s ? s.name : (opt.empty || '（未入力）'), tx, y + h - 26, tw, 38, 700, FB, 'left', s ? C.fg : C.mute);
+    // 曲名：長いときは折り返して複数行にする（入りきらなければ文字を小さくする）
+    title(s ? s.name : (opt.empty || '（未入力）'), tx, y + 60, tw, y + h - 12 - (y + 60), s ? C.fg : C.mute);
     if (opt.ban) {
       ctx.fillStyle = 'rgba(246,249,253,.72)'; rr(x, y, w, h, 14); ctx.fill();
       ctx.strokeStyle = C.ban; ctx.lineWidth = 5;
@@ -162,7 +215,8 @@ var DrawKit = window.DrawKit || (() => {
       fit(m[sd + 'Name'] + ' の自選曲', x, top - 12, colW, 40, 800, FD, 'left');
       songs.forEach((s, i) => {
         const o = { img: s && imgs.get(s.key) };
-        if (mode === 'final') { if (ban === i) o.ban = true; if (pick === i) { o.hi = true; o.tag = '自選曲'; } }
+        if (mode === 'final' || mode === 'ban') { if (ban === i) o.ban = true; }
+        if (mode === 'final' && pick === i) { o.hi = true; o.tag = '自選曲'; }
         songCard(s, x, top + 18 + i * (cardH + 16), colW, cardH, o);
       });
     });
@@ -179,6 +233,16 @@ var DrawKit = window.DrawKit || (() => {
     rr(80, y + 20, W - 160, 96, 16); ctx.fillStyle = C.card2; ctx.fill(); ctx.lineWidth = 1.5; ctx.strokeStyle = C.accent; ctx.stroke();
     fit('相手の自選曲から1曲をBANしてください', W / 2, y + 82, W - 240, 38, 800, FD, 'center', C.accent);
     footer(h, V.notes.reveal);
+  }
+
+  // BAN結果：両者の BAN だけを見せる（自選曲はまだ決まっていない段階）
+  function drawBan(m, i, imgs) {
+    const h = 960;
+    base(h, `BAN結果　${label(i + 1)}`);
+    const y = columns(m, 'ban', imgs);
+    rr(80, y + 20, W - 160, 96, 16); ctx.fillStyle = C.card2; ctx.fill(); ctx.lineWidth = 1.5; ctx.strokeStyle = C.accent; ctx.stroke();
+    fit('BANされなかった2曲から自選曲を1曲選んでください', W / 2, y + 82, W - 240, 38, 800, FD, 'center', C.accent);
+    footer(h, V.notes.ban);
   }
 
   function drawFinal(m, i, imgs) {
@@ -215,7 +279,7 @@ var DrawKit = window.DrawKit || (() => {
     const charts = [...m.aSongs, ...m.bSongs, ...(kind === 'final' ? m.finals.map((f) => f.s) : [])].filter(Boolean);
     const imgs = new Map();
     await Promise.all(charts.map(async (s) => imgs.set(s.key, await loadJacket(s.img, opt.preview))));
-    if (kind === 'reveal') drawReveal(m, idx, imgs); else drawFinal(m, idx, imgs);
+    if (kind === 'reveal') drawReveal(m, idx, imgs); else if (kind === 'ban') drawBan(m, idx, imgs); else drawFinal(m, idx, imgs);
   }
   return { render };
 })();

@@ -296,7 +296,7 @@ function renderSettingsForm() {
   $('#sDeadline').value = s.entryDeadline || ''; $('#sNotice').value = s.notice || '';
   $('#sPhase').innerHTML = Object.entries(PHASE_LABEL).map(([k, v]) => `<option value="${k}"${k === s.phase ? ' selected' : ''}>${v}</option>`).join('');
   $('#sPhaseNote').value = s.phaseNote || '';
-  $('#nPair').value = s.notes.pair; $('#nReveal').value = s.notes.reveal; $('#nFinal').value = s.notes.final;
+  $('#nPair').value = s.notes.pair; $('#nReveal').value = s.notes.reveal; $('#nBan').value = s.notes.ban || ''; $('#nFinal').value = s.notes.final;
   $('#sFormat').value = s.format || 'main';
   const box = $('#divDefaults');
   box.replaceChildren();
@@ -326,7 +326,7 @@ function readSettingsForm() {
     const inp = $(`#dd-${d.id}-cap`);
     settings.divDefaults[d.id] = { ...defOf(d.id), ...(inp ? { cap: Number(inp.value) || 15 } : {}) };
   });
-  settings.notes = { pair: $('#nPair').value, reveal: $('#nReveal').value, final: $('#nFinal').value };
+  settings.notes = { pair: $('#nPair').value, reveal: $('#nReveal').value, ban: $('#nBan').value, final: $('#nFinal').value };
 }
 $('[data-pane=settings]').addEventListener('input', (e) => {
   if (e.target.closest('.picker')) return;
@@ -345,9 +345,10 @@ const divMatches = (div = curDiv) => matches.filter((m) => m.div === div);
 // らいむ部門で両者が Q11（Lv14）に「はい」と答えていれば、Lv14 を解禁する
 const wantsLv14 = (id) => !!entryById(id)?.answers?.lime?.lv14;
 const autoLv14 = (div, a, b) => div === 'lime' && a != null && b != null && wantsLv14(a) && wantsLv14(b);
+const DEFAULT_CAP = { lime: 13.9, lemon: 14.9 }; // 部門ごとの上限の初期値
 const emptyMatch = (div, a = null, b = null) => {
   const dd = defOf(div);
-  return { id: newId(), div, a, b, cap: dd.cap ?? 14, kadai: dd.kadai || '', kadai2: dd.kadai2 || '', lv14: autoLv14(div, a, b), aSongs: ['', '', ''], bSongs: ['', '', ''], aBan: -1, aPick: -1, bBan: -1, bPick: -1, edited: false };
+  return { id: newId(), div, a, b, cap: dd.cap ?? DEFAULT_CAP[div] ?? 14, kadai: dd.kadai || '', kadai2: dd.kadai2 || '', lv14: autoLv14(div, a, b), aSongs: ['', '', ''], bSongs: ['', '', ''], aBan: -1, aPick: -1, bBan: -1, bPick: -1, edited: false };
 };
 
 function divTabs(el, onPick) {
@@ -602,7 +603,7 @@ $('#kindTabs').addEventListener('click', (e) => {
 });
 $('#imgMatch').onchange = (e) => { imgSel = e.target.value; renderImage(); };
 
-const KIND_NAME = { pair: '組み合わせ', reveal: '選曲公開', final: '対戦曲' };
+const KIND_NAME = { pair: '組み合わせ', reveal: '選曲公開', ban: 'BAN結果', final: '対戦曲' };
 const safe = (s) => String(s || '').replace(/[\\/:*?"<>|\s]/g, '_');
 const fileName = (div, k, i) => `${safe(settings.title || 'mogucup')}_${safe(divName(div))}_${KIND_NAME[k]}${k === 'pair' ? '' : '_M' + String(i + 1).padStart(2, '0')}.png`;
 async function download(div, k, i) {

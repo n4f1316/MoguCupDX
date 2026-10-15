@@ -6,7 +6,7 @@
 <meta name="robots" content="noindex">
 <title>もぐらたたきカップ 運営</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=M+PLUS+Rounded+1c:wght@500;800&family=Zen+Kaku+Gothic+New:wght@400;700&family=JetBrains+Mono:wght@500&display=swap">
-<link rel="stylesheet" href="common.css?v=20261015k">
+<link rel="stylesheet" href="common.css?v=20261015m">
 <style>
 main{max-width:1280px;margin:0 auto;display:grid;gap:16px}
 .top{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:8px 16px}
@@ -58,7 +58,7 @@ td input{padding:3px 6px;font-size:14px}
 .bmlink{display:inline-block;padding:8px 16px;border-radius:999px;background:var(--accent);color:var(--accent-fg);font-weight:700;text-decoration:none;cursor:grab}
 .divdef{border-left:3px solid var(--accent);padding-left:12px;display:grid;gap:8px}
 .divdef h3{margin:0;font-family:var(--f-display);font-size:.95rem}
-#matchDiv button[aria-selected="true"],#imgDiv button[aria-selected="true"]{background:var(--panel);border-color:var(--accent);box-shadow:inset 0 0 0 2px var(--accent);font-weight:700}
+#matchDiv button[aria-selected="true"],#imgDiv button[aria-selected="true"]{background:var(--panel);color:var(--fg);border-color:var(--accent);box-shadow:inset 0 0 0 2px var(--accent);font-weight:700}
 </style>
 </head>
 <body>
@@ -129,7 +129,8 @@ td input{padding:3px 6px;font-size:14px}
       <h2>告知画像の下に入れる一言</h2>
       <label>組み合わせ発表<input id="nPair" type="text"></label>
       <label>選曲公開<input id="nReveal" type="text"></label>
-      <label>BAN結果・対戦曲<input id="nFinal" type="text"></label>
+      <label>BAN結果<input id="nBan" type="text"></label>
+      <label>対戦曲<input id="nFinal" type="text"></label>
     </section>
 
     <section class="panel" data-pane="matches" hidden>
@@ -154,7 +155,8 @@ td input{padding:3px 6px;font-size:14px}
         <div class="tabs" role="group" aria-label="画像の種類" id="kindTabs">
           <button type="button" data-kind="pair" aria-selected="true">組み合わせ発表</button>
           <button type="button" data-kind="reveal" aria-selected="false">選曲公開</button>
-          <button type="button" data-kind="final" aria-selected="false">BAN結果・対戦曲</button>
+          <button type="button" data-kind="ban" aria-selected="false">BAN結果</button>
+          <button type="button" data-kind="final" aria-selected="false">対戦曲</button>
         </div>
         <label id="imgMatchWrap" hidden style="min-width:240px">対象の試合<select id="imgMatch"></select></label>
       </div>
@@ -166,7 +168,7 @@ td input{padding:3px 6px;font-size:14px}
       </div>
       <div class="bmbox">
         <h2>ジャケット入りの告知画像を作る</h2>
-        <p class="note">ジャケットは公式サイトの画像のため、このページではプレビューとして表示するだけで、ジャケット入りの画像は保存できません（組み合わせ発表はジャケットを使わないので、ここで保存できます）。選曲公開と BAN結果・対戦曲は、maimaidx.jp の上で動く告知画像用のブックマークで作ってください。画像はそのブラウザの中で作るだけで、どこにも置きません。</p>
+        <p class="note">ジャケットは公式サイトの画像のため、このページではプレビューとして表示するだけで、ジャケット入りの画像は保存できません（組み合わせ発表はジャケットを使わないので、ここで保存できます）。選曲公開・BAN結果・対戦曲は、maimaidx.jp の上で動く告知画像用のブックマークで作ってください。画像はそのブラウザの中で作るだけで、どこにも置きません。</p>
         <ol class="note">
           <li>下のボタンをブックマークバーへドラッグして登録する（できない場合は「コードをコピー」で、URL欄にコードを貼ったブックマークを作る）</li>
           <li>ここで部門を選び「画像用データをコピー」を押す</li>
@@ -184,9 +186,9 @@ td input{padding:3px 6px;font-size:14px}
 </main>
 <canvas id="cv" hidden></canvas>
 
-<script src="config.js?v=20261015k"></script>
-<script src="common.js?v=20261015k"></script>
-<script src="draw.js?v=20261015k"></script>
-<script src="admin.js?v=20261015k"></script>
+<script src="config.js?v=20261015m"></script>
+<script src="common.js?v=20261015m"></script>
+<script src="draw.js?v=20261015m"></script>
+<script src="admin.js?v=20261015m"></script>
 </body>
 </html>

@@ -183,7 +183,8 @@ async function refresh() {
 const diffCls = (d) => 'd-' + d.replace(':', '').toUpperCase();
 function chipsOf(c) {
   const box = el('div', 'chips');
-  box.append(el('span', `chip k-${c.kind}`, c.kind), el('span', `chip ${diffCls(c.diff)}`, c.diff), el('span', 'chip c', fmtConst(c.c)), el('span', 'chip lv', 'Lv' + c.lv));
+  // 2fRATE と同じ色で「MAS ST 13.7」の順に並べる
+  box.append(el('span', `chip ${diffCls(c.diff)}`, DIFF_SHORT[c.diff] || c.diff), el('span', `chip k-${c.kind}`, c.kind), el('span', 'chip c', fmtConst(c.c)));
   return box;
 }
 function songEl(key, right) {
@@ -238,19 +239,21 @@ function renderMatch(box, m, phase) {
   else if (phase === 'done') renderDone(box, m);
 }
 
-// 運営の告知画像と同じ形の表示（BAN の段階から：選曲公開、確定後：BAN結果・対戦曲）。表示だけで保存はしない
+// 運営の告知画像と同じ形の表示。段階に合わせて見せる範囲を広げる。表示だけで保存はしない
+//   BAN：選曲公開（両者の自選曲）／自選曲の決定：BAN結果／対戦曲確定：対戦曲（BAN と自選曲つき）
 const imgCache = new Map();
+const IMG_KIND = { ban: 'reveal', pick: 'ban', done: 'final' };
 function matchImage(m, phase) {
-  const kind = phase === 'done' ? 'final' : phase === 'ban' || phase === 'pick' ? 'reveal' : null;
+  const kind = IMG_KIND[phase];
   if (!kind || !window.DrawKit || m.mySongs.length !== 3 || !m.oppSongs || m.oppSongs.length !== 3) return null;
   const ch = (k) => (k && charts?.byKey.get(k)) || null;
   const meName = ME.entry.entryName, opName = m.opponent?.entryName || '相手';
-  const done = kind === 'final';
+  const done = kind === 'final', bans = kind !== 'reveal';
   const myPick = done ? m.myPick : -1, opPick = done && m.oppPick != null ? m.oppPick : -1;
   const match = {
     aName: meName, bName: opName,
     aSongs: m.mySongs.map(ch), bSongs: m.oppSongs.map(ch), cap: m.cap, lv14: m.lv14,
-    aBan: done ? (m.bannedMine ?? -1) : -1, bBan: done ? m.myBan : -1, aPick: myPick, bPick: opPick,
+    aBan: bans ? (m.bannedMine ?? -1) : -1, bBan: bans ? m.myBan : -1, aPick: myPick, bPick: opPick,
     finals: finalSongs({
       format: ME.settings.format, kadai: m.kadai, kadai2: m.kadai2, aName: meName, bName: opName,
       aKey: myPick >= 0 ? m.mySongs[myPick] : '', bKey: opPick >= 0 ? m.oppSongs[opPick] : '',
@@ -263,7 +266,7 @@ function matchImage(m, phase) {
   if (imgCache.has(key)) { wrap.append(imgCache.get(key)); return wrap; }
   const cv = document.createElement('canvas');
   cv.setAttribute('role', 'img');
-  cv.setAttribute('aria-label', kind === 'final' ? '対戦曲の画像' : '選曲公開の画像');
+  cv.setAttribute('aria-label', { reveal: '選曲公開', ban: 'BAN結果', final: '対戦曲' }[kind] + 'の画像');
   wrap.append(cv);
   DrawKit.render(cv, view, kind, m.no - 1, { preview: true }).then(() => imgCache.set(key, cv)).catch(() => wrap.remove());
   return wrap;
