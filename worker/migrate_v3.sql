@@ -1,0 +1,1 @@
+ALTER TABLE entries ADD COLUMN answers TEXT NOT NULL DEFAULT '{}';

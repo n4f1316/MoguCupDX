@@ -41,9 +41,8 @@ const DEFAULT_SETTINGS = {
   notice: '',          // 参加者ページに出すお知らせ
   phase: 'closed',     // closed：組み合わせ非公開 / select：自選曲の提出 / ban：BAN / pick：自選曲の決定 / done：対戦曲の確定
   phaseNote: '',       // 段階の締切など、参加者ページに出す一言
-  defaultCap: 14.0,    // 新しく作る対戦カードの譜面定数の上限
-  defaultKadai: '',    // 新しく作る対戦カードの運営課題曲
-  defaultKadai2: '',   // 新しく作る対戦カードの運営課題曲2（両者が同じ曲を自選曲にしたときだけ使う）
+  // 部門ごとの、新しく作る対戦カードの既定値（上限・運営課題曲・運営課題曲2）
+  divDefaults: { lime: { cap: 14.0, kadai: '', kadai2: '' }, lemon: { cap: 14.0, kadai: '', kadai2: '' } },
   format: 'main',      // main：本編（運営課題曲あり） / mini：mini（運営課題曲なし、自選曲の投げ合いのみ）
   notes: {
     pair: '自選曲を3曲選んで提出してください',
@@ -124,7 +123,7 @@ async function check2f(env, username, pin) {
     if (!r.ok) return { unavailable: true };
     const j = await r.json().catch(() => null);
     if (!j || (!j.ok && j.busy)) return { unavailable: true };
-    if (j.ok && j.exists) return { valid: true };
+    if (j.ok && j.exists) return { valid: true, profile: pickProfile(j) };
     if (j.ok) return { missing: true };
     return { wrongPin: true };
   } catch {
@@ -146,8 +145,18 @@ async function recordFail(env, username) {
 }
 const clearFails = (env, username) => env.DB.prepare('DELETE FROM login_fails WHERE username=?').bind(username).run();
 
-async function upsert2fUser(env, username) {
+// 2fRATE のレート（☆7まで）と、MASTER・Re:MASTER の☆5・☆6 達成数（☆5 は☆5以上の数）
+function pickProfile(j) {
+  const src = j.record || j;
+  const n = (v) => (Number.isFinite(Number(v)) ? Number(v) : null);
+  const c = src.counts || {};
+  const p = { rateFull: n(src.rateFull), star5Mas: n(c.star5Mas), star5Remas: n(c.star5Remas), star6Mas: n(c.star6Mas), star6Remas: n(c.star6Remas) };
+  return Object.values(p).some((v) => v !== null) ? p : null;
+}
+
+async function upsert2fUser(env, username, profile) {
   await env.DB.prepare("INSERT INTO users (username, source) VALUES (?, '2frate') ON CONFLICT(username) DO NOTHING").bind(username).run();
+  if (profile) await env.DB.prepare('UPDATE users SET profile=? WHERE username=?').bind(JSON.stringify(profile), username).run();
   return env.DB.prepare('SELECT * FROM users WHERE username=?').bind(username).first();
 }
 
@@ -165,7 +174,7 @@ async function register(req, env) {
   }
   let user;
   if (c.valid) {
-    user = await upsert2fUser(env, username);
+    user = await upsert2fUser(env, username, c.profile);
   } else {
     const salt = randomHex(16);
     await env.DB.prepare("INSERT INTO users (username, source, pin_hash, pin_salt) VALUES (?, 'local', ?, ?)")
@@ -193,13 +202,13 @@ async function login(req, env) {
       await recordFail(env, username);
       throw err(401, 'ユーザー名か PIN が違います（2fRATE と連携しているユーザーは 2fRATE の PIN です）');
     }
-    user = await upsert2fUser(env, username);
+    user = await upsert2fUser(env, username, c.profile);
   }
   await clearFails(env, username);
   return json({ token: await newSession(env, user.id), user: userView(user) });
 }
 
-const userView = (u) => ({ username: u.username, linked2f: u.source === '2frate' });
+const userView = (u) => ({ username: u.username, linked2f: u.source === '2frate', profile: u.source === '2frate' ? JSON.parse(u.profile || 'null') : null });
 
 async function newSession(env, userId) {
   const token = base64url(crypto.getRandomValues(new Uint8Array(32)));
@@ -222,13 +231,19 @@ async function requireUser(req, env) {
 //  参加申請・自分の試合
 // ============================================================
 
+// 部門と神プレート（申請の設問）
+const DIVISIONS = [{ id: 'lime', name: 'らいむ部門' }, { id: 'lemon', name: 'れもん部門' }];
+const PLATES = ['真', '超', '檄', '橙', '暁', '桃', '櫻', '紫', '菫', '白', '雪', '輝', '舞', '熊', '華', '爽', '煌', '宙', '星', '祭', '祝', '双', '宴', '鏡', '彩', '丸', '廻'];
+
 async function entry(req, env, user) {
   const s = await getSettings(env);
   if (!isOpen(s)) throw err(403, '参加申請の受付は終了しています');
   if (await env.DB.prepare('SELECT 1 FROM entries WHERE user_id=?').bind(user.id).first()) throw err(409, 'このユーザーはすでに申請しています');
-  const v = validateEntry(await body(req));
-  const r = await env.DB.prepare('INSERT INTO entries (entry_name, x_id, rating, frate, user_id) VALUES (?, ?, ?, ?, ?)')
-    .bind(v.entryName, v.xId, v.rating, v.frate, user.id).run().catch(dup);
+  const b = await body(req);
+  const v = validateEntry(b);
+  const answers = validateAnswers(b.answers || {});
+  const r = await env.DB.prepare('INSERT INTO entries (entry_name, x_id, rating, frate, user_id, answers) VALUES (?, ?, ?, ?, ?, ?)')
+    .bind(v.entryName, v.xId, v.rating, v.frate, user.id, JSON.stringify(answers)).run().catch(dup);
   return json({ ok: true, id: r.meta.last_row_id });
 }
 
@@ -237,61 +252,100 @@ function validateEntry(b) {
   const xId = String(b.xId ?? '').trim().replace(/^@/, '');
   const rating = Number(b.rating);
   const frate = Number(b.frate);
-  if (!entryName || [...entryName].length > 20) throw err(400, 'エントリー名は1〜20文字で入力してください');
+  if (!entryName || [...entryName].length > 20) throw err(400, 'スコアタで使用する名前は1〜20文字で入力してください');
   if (!/^[A-Za-z0-9_]{1,15}$/.test(xId)) throw err(400, 'X の ID は英数字と _ の15文字以内で入力してください（@ は不要）');
-  if (!Number.isInteger(rating) || rating < 0 || rating > 20000) throw err(400, 'maimai のレートは 0〜20000 の整数で入力してください');
+  if (!Number.isInteger(rating) || rating < 0 || rating > 20000) throw err(400, 'レートは 0〜20000 の整数で入力してください');
   if (!Number.isFinite(frate) || frate < 0 || frate > 30) throw err(400, '2fRATE は 0〜30 の数値で入力してください');
   return { entryName, xId, rating, frate: Math.round(frate * 1000) / 1000 };
 }
 
+// 申請の設問（Q2・Q4・Q6〜Q12）
+function validateAnswers(a) {
+  const discord = String(a.discord ?? '').trim();
+  if (!discord || [...discord].length > 40) throw err(400, 'Discord で使用している名前を40文字以内で入力してください');
+  const divisions = DIVISIONS.map((d) => d.id).filter((id) => (a.divisions || []).includes(id));
+  if (!divisions.length) throw err(400, '参加したい部門を1つ以上選んでください');
+  const plates = PLATES.filter((p) => (a.plates || []).includes(p));
+  const count = (v, label) => {
+    const n = Number(v);
+    if (v === '' || v == null || !Number.isInteger(n) || n < 0 || n > 9999) throw err(400, `${label}を0以上の整数で入力してください`);
+    return n;
+  };
+  const out = { discord, divisions, plates };
+  if (divisions.includes('lime')) {
+    const l = a.lime || {};
+    if (typeof l.lv14 !== 'boolean') throw err(400, '【らいむ部門】自選曲にレベル14を含められるようにしたいか選んでください');
+    out.lime = { m5: count(l.m5, '【らいむ部門】MASTERの星5達成譜面数'), r5: count(l.r5, '【らいむ部門】Re:MASTERの星5達成譜面数'), s6: count(l.s6, '【らいむ部門】星6達成合計譜面数'), lv14: l.lv14 };
+  }
+  if (divisions.includes('lemon')) {
+    const l = a.lemon || {};
+    out.lemon = { ap14: count(l.ap14, '【れもん部門】レベル14のAP達成譜面数'), ap14p: count(l.ap14p, '【れもん部門】レベル14+のAP達成譜面数') };
+  }
+  return out;
+}
+
 function dup(e) {
-  if (String(e).includes('UNIQUE')) throw err(409, 'このエントリー名または X の ID はすでに申請されています');
+  if (String(e).includes('UNIQUE')) throw err(409, 'この名前または X の ID はすでに申請されています');
   throw e;
 }
 
-// 自分の試合と、今の段階で見てよい情報だけを返す
-async function myContext(env, user) {
+// 自選曲として選べるか：上限以下。Lv14解禁の試合では、上限を超える Lv14（14.0〜14.5）を1曲まで
+const isLv14 = (c) => c >= 14 - 1e-9 && c < 14.6 - 1e-9;
+function checkSongs(consts, songs, m, mini) {
+  let over = 0;
+  for (const k of songs) {
+    const c0 = consts[k];
+    if (c0 === undefined) throw err(400, '譜面データにない譜面が含まれています');
+    if (!mini && ((m.kadai && k === m.kadai))) throw err(400, '運営課題曲は自選曲に選べません');
+    if (c0 <= Number(m.cap) + 1e-9) continue;
+    if (m.lv14 && isLv14(c0)) { over++; continue; }
+    throw err(400, `譜面定数 ${Number(m.cap).toFixed(1)} を超える譜面は選べません${m.lv14 ? '（レベル14を1曲だけ除く）' : ''}`);
+  }
+  if (over > 1) throw err(400, '上限を超えるレベル14の譜面は1曲までです');
+}
+
+// 自分の試合（部門ごとに1試合）と、今の段階で見てよい情報
+async function myContext(env, user, matchId) {
   const s = await getSettings(env);
   const e = await env.DB.prepare('SELECT * FROM entries WHERE user_id=?').bind(user.id).first();
-  if (!e || s.phase === 'closed') return { s, e, m: null };
+  if (!e || s.phase === 'closed') return { s, e, list: [] };
   const matches = (await getKV(env, 'matches')) ?? [];
-  const m = matches.find((x) => x.a === e.id || x.b === e.id);
-  if (!m) return { s, e, m: null };
-  const side = m.a === e.id ? 'a' : 'b';
-  const oppId = side === 'a' ? m.b : m.a;
-  const opp = oppId ? await env.DB.prepare('SELECT id, entry_name, x_id FROM entries WHERE id=?').bind(oppId).first() : null;
-  const row = async (id) => {
+  const mine = matches.filter((x) => (x.a === e.id || x.b === e.id) && (!matchId || x.id === matchId));
+  const row = async (mid, id) => {
     if (!id) return { songs: [], ban: -1, pick: -1 };
-    const r = await env.DB.prepare('SELECT songs, ban, pick FROM picks WHERE match_id=? AND entry_id=?').bind(m.id, id).first();
+    const r = await env.DB.prepare('SELECT songs, ban, pick FROM picks WHERE match_id=? AND entry_id=?').bind(mid, id).first();
     return r ? { songs: JSON.parse(r.songs), ban: r.ban, pick: r.pick } : { songs: [], ban: -1, pick: -1 };
   };
-  return { s, e, m, side, opp, mine: await row(e.id), theirs: await row(opp?.id) };
+  const list = [];
+  for (const m of mine) {
+    const oppId = m.a === e.id ? m.b : m.a;
+    const opp = oppId ? await env.DB.prepare('SELECT id, entry_name, x_id FROM entries WHERE id=?').bind(oppId).first() : null;
+    const no = matches.filter((x) => (x.div || '') === (m.div || '')).findIndex((x) => x.id === m.id) + 1;
+    list.push({ m, no, opp, mine: await row(m.id, e.id), theirs: await row(m.id, opp?.id) });
+  }
+  return { s, e, list };
 }
 
 async function me(user, env) {
   const c = await myContext(env, user);
   const ph = PHASES.indexOf(c.s.phase);
   const mini = c.s.format === 'mini';
-  let match = null;
-  if (c.m) {
-    match = {
-      no: ((await getKV(env, 'matches')) ?? []).findIndex((x) => x.id === c.m.id) + 1,
-      cap: c.m.cap, kadai: mini ? '' : c.m.kadai || '',
-      // 運営課題曲2：両者が同じ曲を自選曲にしたときだけ、対戦曲確定の段階で公開
-      kadai2: !mini && ph >= 4 && c.mine.pick >= 0 && c.theirs.pick >= 0 && c.mine.songs[c.mine.pick] === c.theirs.songs[c.theirs.pick] ? c.m.kadai2 || '' : '',
-      opponent: c.opp ? { entryName: c.opp.entry_name, xId: c.opp.x_id } : null,
-      mySongs: c.mine.songs,
-      myBan: c.mine.ban,                                         // 自分が BAN した相手の曲の番号
-      myPick: c.mine.pick,                                       // 自分が決めた自選曲の番号
-      oppSubmitted: c.theirs.songs.length === 3,
-      oppSongs: ph >= 2 ? c.theirs.songs : null,                 // BAN の段階から公開
-      bannedMine: ph >= 3 ? c.theirs.ban : null,                 // 相手に BAN された自分の曲（決定の段階から）
-      oppBanDone: c.theirs.ban >= 0,
-      oppPick: ph >= 4 ? c.theirs.pick : null,                   // 相手の自選曲（確定の段階から）
-    };
-  }
-  const entryView = c.e && { entryName: c.e.entry_name, xId: c.e.x_id, rating: c.e.rating, frate: c.e.frate };
-  return json({ user: userView(user), settings: publicSettings(c.s), entry: entryView, match });
+  const matches = c.list.map(({ m, no, opp, mine, theirs }) => ({
+    id: m.id, no, div: m.div || '', divName: DIVISIONS.find((d) => d.id === m.div)?.name || '',
+    cap: m.cap, lv14: !!m.lv14, kadai: mini ? '' : m.kadai || '',
+    // 運営課題曲2：両者が同じ曲を自選曲にしたときだけ、対戦曲確定の段階で公開
+    kadai2: !mini && ph >= 4 && mine.pick >= 0 && theirs.pick >= 0 && mine.songs[mine.pick] === theirs.songs[theirs.pick] ? m.kadai2 || '' : '',
+    opponent: opp ? { entryName: opp.entry_name } : null,
+    mySongs: mine.songs,
+    myBan: mine.ban,                                         // 自分が BAN した相手の曲の番号
+    myPick: mine.pick,                                       // 自分が決めた自選曲の番号
+    oppSubmitted: theirs.songs.length === 3,
+    oppSongs: ph >= 2 ? theirs.songs : null,                 // BAN の段階から公開
+    bannedMine: ph >= 3 ? theirs.ban : null,                 // 相手に BAN された自分の曲（決定の段階から）
+    oppPick: ph >= 4 ? theirs.pick : null,                   // 相手の自選曲（確定の段階から）
+  }));
+  const entryView = c.e && { entryName: c.e.entry_name, xId: c.e.x_id, rating: c.e.rating, frate: c.e.frate, answers: JSON.parse(c.e.answers || '{}') };
+  return json({ user: userView(user), settings: publicSettings(c.s), entry: entryView, matches });
 }
 
 async function writePick(env, matchId, entryId, fields) {
@@ -301,46 +355,42 @@ async function writePick(env, matchId, entryId, fields) {
     .bind(...Object.values(fields), matchId, entryId).run();
 }
 
-async function submitSongs(req, env, user) {
-  const c = await myContext(env, user);
-  if (!c.m) throw err(403, '対戦カードがまだ公開されていません');
-  if (c.s.phase !== 'select') throw err(403, '今は自選曲を提出できる期間ではありません');
+async function oneMatch(req, env, user, phase, phaseMsg) {
   const b = await body(req);
+  const c = await myContext(env, user, String(b.matchId || ''));
+  if (!c.list.length) throw err(403, '対戦カードがまだ公開されていません');
+  if (c.list.length > 1) throw err(400, 'どの試合の提出か分かりませんでした。ページを再読み込みしてください');
+  if (c.s.phase !== phase) throw err(403, phaseMsg);
+  return { b, c, x: c.list[0] };
+}
+
+async function submitSongs(req, env, user) {
+  const { b, c, x } = await oneMatch(req, env, user, 'select', '今は自選曲を提出できる期間ではありません');
   const songs = Array.isArray(b.songs) ? b.songs.map(String) : [];
   if (songs.length !== 3) throw err(400, '自選曲を3曲選んでください');
   if (new Set(songs).size !== 3) throw err(400, '同じ譜面を2回以上選ぶことはできません');
-  const consts = await loadConsts(env);
-  for (const k of songs) {
-    const c0 = consts[k];
-    if (c0 === undefined) throw err(400, '譜面データにない譜面が含まれています');
-    if (c0 > Number(c.m.cap) + 1e-9) throw err(400, `譜面定数 ${Number(c.m.cap).toFixed(1)} を超える譜面は選べません`);
-    if (c.s.format !== 'mini' && c.m.kadai && k === c.m.kadai) throw err(400, '運営課題曲は自選曲に選べません');
-  }
-  await writePick(env, c.m.id, c.e.id, { songs: JSON.stringify(songs), pick: -1 });
+  checkSongs(await loadConsts(env), songs, x.m, c.s.format === 'mini');
+  await writePick(env, x.m.id, c.e.id, { songs: JSON.stringify(songs), pick: -1 });
   return json({ ok: true });
 }
 
 async function submitBan(req, env, user) {
-  const c = await myContext(env, user);
-  if (!c.m) throw err(403, '対戦カードがまだ公開されていません');
-  if (c.s.phase !== 'ban') throw err(403, '今は BAN を選べる期間ではありません');
-  if (c.theirs.songs.length !== 3) throw err(409, '相手の自選曲がまだそろっていません。運営に連絡してください');
-  const i = Number((await body(req)).index);
+  const { b, c, x } = await oneMatch(req, env, user, 'ban', '今は BAN を選べる期間ではありません');
+  if (x.theirs.songs.length !== 3) throw err(409, '相手の自選曲がまだそろっていません。運営に連絡してください');
+  const i = Number(b.index);
   if (![0, 1, 2].includes(i)) throw err(400, 'BAN する曲を選んでください');
-  await writePick(env, c.m.id, c.e.id, { ban: i });
+  await writePick(env, x.m.id, c.e.id, { ban: i });
   return json({ ok: true });
 }
 
 async function submitPick(req, env, user) {
-  const c = await myContext(env, user);
-  if (!c.m) throw err(403, '対戦カードがまだ公開されていません');
-  if (c.s.phase !== 'pick') throw err(403, '今は自選曲を決める期間ではありません');
-  if (c.mine.songs.length !== 3) throw err(409, '自選曲が提出されていません。運営に連絡してください');
-  if (c.theirs.ban < 0) throw err(409, '相手の BAN がまだ決まっていません。運営に連絡してください');
-  const i = Number((await body(req)).index);
+  const { b, c, x } = await oneMatch(req, env, user, 'pick', '今は自選曲を決める期間ではありません');
+  if (x.mine.songs.length !== 3) throw err(409, '自選曲が提出されていません。運営に連絡してください');
+  if (x.theirs.ban < 0) throw err(409, '相手の BAN がまだ決まっていません。運営に連絡してください');
+  const i = Number(b.index);
   if (![0, 1, 2].includes(i)) throw err(400, '自選曲を選んでください');
-  if (i === c.theirs.ban) throw err(400, 'BAN された曲は選べません');
-  await writePick(env, c.m.id, c.e.id, { pick: i });
+  if (i === x.theirs.ban) throw err(400, 'BAN された曲は選べません');
+  await writePick(env, x.m.id, c.e.id, { pick: i });
   return json({ ok: true });
 }
 
@@ -364,15 +414,21 @@ async function loadConsts(env) {
 async function admin(req, env, sub, m) {
   if (m === 'GET' && sub === 'entries') {
     const { results } = await env.DB.prepare('SELECT e.*, u.username, u.source FROM entries e LEFT JOIN users u ON u.id = e.user_id ORDER BY e.id').all();
-    return json({ entries: results });
+    return json({ entries: results.map((r) => ({ ...r, answers: JSON.parse(r.answers || '{}') })) });
   }
   const em = sub.match(/^entries\/(\d+)$/);
   if (em && m === 'PUT') {
     const b = await body(req);
     const v = validateEntry(b);
     const memo = String(b.memo ?? '').slice(0, 200);
-    await env.DB.prepare('UPDATE entries SET entry_name=?, x_id=?, rating=?, frate=?, memo=? WHERE id=?')
-      .bind(v.entryName, v.xId, v.rating, v.frate, memo, +em[1]).run().catch(dup);
+    const cur = await env.DB.prepare('SELECT answers FROM entries WHERE id=?').bind(+em[1]).first();
+    const prev = JSON.parse(cur?.answers || '{}');
+    // 運営は Discord 名と部門だけ直せる（部門別の回答は残す）
+    const answers = { ...prev };
+    if (b.discord !== undefined) answers.discord = String(b.discord).trim().slice(0, 40);
+    if (Array.isArray(b.divisions)) answers.divisions = DIVISIONS.map((d) => d.id).filter((id) => b.divisions.includes(id));
+    await env.DB.prepare('UPDATE entries SET entry_name=?, x_id=?, rating=?, frate=?, memo=?, answers=? WHERE id=?')
+      .bind(v.entryName, v.xId, v.rating, v.frate, memo, JSON.stringify(answers), +em[1]).run().catch(dup);
     return json({ ok: true });
   }
   if (em && m === 'DELETE') {
@@ -402,6 +458,8 @@ async function admin(req, env, sub, m) {
         cap: Number(x.cap) || 15,
         kadai: String(x.kadai || ''),
         kadai2: String(x.kadai2 || ''),
+        div: DIVISIONS.some((d) => d.id === x.div) ? x.div : '',
+        lv14: !!x.lv14,
       }));
       await putKV(env, 'matches', ms);
     }
@@ -474,7 +532,9 @@ async function requireAdmin(req, env) {
 
 async function getSettings(env) {
   const s = (await getKV(env, 'settings')) ?? {};
-  return { ...DEFAULT_SETTINGS, ...s, notes: { ...DEFAULT_SETTINGS.notes, ...(s.notes || {}) } };
+  const dd = {};
+  for (const k of Object.keys(DEFAULT_SETTINGS.divDefaults)) dd[k] = { ...DEFAULT_SETTINGS.divDefaults[k], ...(s.divDefaults?.[k] || {}) };
+  return { ...DEFAULT_SETTINGS, ...s, notes: { ...DEFAULT_SETTINGS.notes, ...(s.notes || {}) }, divDefaults: dd };
 }
 async function getKV(env, key) {
   const r = await env.DB.prepare('SELECT value FROM kv WHERE key=?').bind(key).first();
