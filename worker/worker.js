@@ -46,11 +46,12 @@ const DEFAULT_SETTINGS = {
   phase: 'closed',     // closed：組み合わせ非公開 / select：自選曲の提出 / ban：BAN / pick：自選曲の決定 / done：対戦曲の確定
   phaseNote: '',       // 段階の締切など、参加者ページに出す一言
   // 部門ごとの、新しく作る対戦カードの既定値（上限・運営課題曲・運営課題曲2）
-  divDefaults: { lime: { cap: 14.0, kadai: '', kadai2: '' }, lemon: { cap: 14.0, kadai: '', kadai2: '' } },
+  divDefaults: { lime: { cap: 13.9, kadai: '', kadai2: '' }, lemon: { cap: 14.9, kadai: '', kadai2: '' } },
   format: 'main',      // main：本編（運営課題曲あり） / mini：mini（運営課題曲なし、自選曲の投げ合いのみ）
   notes: {
     pair: '自選曲を3曲選んで提出してください',
-    reveal: 'BANされなかった2曲から、自分の自選曲を1曲選んで提出してください',
+    reveal: '相手の自選曲から1曲を選んで、BANを提出してください',
+    ban: 'BANされなかった2曲から、自分の自選曲を1曲選んで提出してください',
     final: '対戦曲は自選曲・他選曲・運営課題曲の3曲です',
   },
 };
