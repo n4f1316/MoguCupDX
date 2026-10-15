@@ -13,26 +13,37 @@ var DrawKit = window.DrawKit || (() => {
   const LOGO_URL = (window.MOGU_ASSETS || '') + 'logo3rd.svg?v=1';
 
   const imgCache = new Map();
-  function loadImg(url) {
+  // cors：true なら CORS 付きで読む（canvas を保存できる）。false は表示専用（保存できなくなる）
+  function loadImg(url, cors = true) {
     if (!url) return Promise.resolve(null);
-    if (!imgCache.has(url)) {
-      imgCache.set(url, new Promise((res) => {
+    const key = (cors ? 'c:' : 'p:') + url;
+    if (!imgCache.has(key)) {
+      imgCache.set(key, new Promise((res) => {
         const im = new Image();
-        im.crossOrigin = 'anonymous';
+        if (cors) im.crossOrigin = 'anonymous';
         im.onload = () => res(im);
         im.onerror = () => res(null);
         im.src = url;
       }));
     }
-    return imgCache.get(url);
+    return imgCache.get(key);
   }
 
-  // ジャケットは maimaidx.jp 上（同じサイトの画像なので canvas に描いて保存できる）でだけ読む。
-  // それ以外（運営ページのプレビュー）では「?」の枠にする。画像はこちらでは保存・公開しない
+  // ジャケット
+  //   maimaidx.jp 上（告知画像用ブックマーク）：同じサイトの画像なので、描いてそのまま保存できる
+  //   運営ページのプレビュー（opt.preview）：公式の画像を表示用に読む。この canvas は保存できない
+  //   それ以外：「?」の枠。画像はこちらでは保存・公開しない
   const ON_OFFICIAL = location.hostname === 'maimaidx.jp';
-  async function loadJacket(img) {
-    if (!img || !ON_OFFICIAL) return null;
-    return loadImg('/maimai-mobile/img/Music/' + img);
+  const PREVIEW_BASES = ['https://maimaidx.jp/maimai-mobile/img/Music/', 'https://maimai.sega.jp/storage/DX_jacket/'];
+  async function loadJacket(img, preview) {
+    if (!img) return null;
+    if (ON_OFFICIAL) return loadImg('/maimai-mobile/img/Music/' + img);
+    if (!preview) return null;
+    for (const base of PREVIEW_BASES) {
+      const im = await loadImg(base + img, false);
+      if (im) return im;
+    }
+    return null;
   }
 
   function rr(x, y, w, h, r) { ctx.beginPath(); ctx.roundRect(x, y, w, h, r); }
@@ -183,7 +194,7 @@ var DrawKit = window.DrawKit || (() => {
   }
 
   // view: { title, badge, notes, matches:[{ aName, bName, aSongs, bSongs, aBan, aPick, bBan, bPick, cap, finals:[{ s, label, kind }] }] }
-  async function render(canvas, view, kind, idx) {
+  async function render(canvas, view, kind, idx, opt = {}) {
     cv = canvas; ctx = cv.getContext('2d'); V = view;
     if (!logo) logo = await loadImg(LOGO_URL);
     await Promise.all([`800 40px ${FD}`, `700 40px ${FB}`, `500 22px ${FM}`].map((f) => document.fonts.load(f, 'もぐらA'))).catch(() => {});
@@ -192,7 +203,7 @@ var DrawKit = window.DrawKit || (() => {
     if (!m) { base(400, '対戦カードがありません'); return; }
     const charts = [...m.aSongs, ...m.bSongs, ...(kind === 'final' ? m.finals.map((f) => f.s) : [])].filter(Boolean);
     const imgs = new Map();
-    await Promise.all(charts.map(async (s) => imgs.set(s.key, await loadJacket(s.img))));
+    await Promise.all(charts.map(async (s) => imgs.set(s.key, await loadJacket(s.img, opt.preview))));
     if (kind === 'reveal') drawReveal(m, idx, imgs); else drawFinal(m, idx, imgs);
   }
   return { render };
