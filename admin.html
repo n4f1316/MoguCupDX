@@ -6,7 +6,7 @@
 <meta name="robots" content="noindex">
 <title>もぐらたたきカップ 運営</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=M+PLUS+Rounded+1c:wght@500;800&family=Zen+Kaku+Gothic+New:wght@400;700&family=JetBrains+Mono:wght@500&display=swap">
-<link rel="stylesheet" href="common.css?v=20261015b">
+<link rel="stylesheet" href="common.css?v=20261015e">
 <style>
 main{max-width:1280px;margin:0 auto;display:grid;gap:16px}
 .top{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:8px 16px}
@@ -51,6 +51,10 @@ td input{padding:3px 6px;font-size:14px}
 .canvasbox{border:1px solid var(--line);border-radius:8px;overflow:hidden;background:var(--soft)}
 .canvasbox img{display:block;width:100%;height:auto}
 #login{max-width:420px}
+.bmbox{border-top:1px solid var(--line);padding-top:12px;display:grid;gap:8px}
+.bmbox h2{margin:0}
+.bmbox ol{margin:0;padding-left:1.4em;display:grid;gap:2px}
+.bmlink{display:inline-block;padding:8px 16px;border-radius:999px;background:var(--accent);color:var(--accent-fg);font-weight:700;text-decoration:none;cursor:grab}
 .divdef{border-left:3px solid var(--accent);padding-left:12px;display:grid;gap:8px}
 .divdef h3{margin:0;font-family:var(--f-display);font-size:.95rem}
 #matchDiv button[aria-selected="true"],#imgDiv button[aria-selected="true"]{background:var(--panel);border-color:var(--accent);box-shadow:inset 0 0 0 2px var(--accent);font-weight:700}
@@ -153,20 +157,36 @@ td input{padding:3px 6px;font-size:14px}
         </div>
         <label id="imgMatchWrap" hidden style="min-width:240px">対象の試合<select id="imgMatch"></select></label>
       </div>
-      <div class="canvasbox"><img id="out" alt="生成された告知画像"></div>
+      <div class="canvasbox"><img id="out" alt="生成された告知画像のプレビュー"></div>
       <div class="btns">
-        <button class="primary" id="dlOne" type="button">この画像を保存</button>
+        <button class="primary" id="copyData" type="button">画像用データをコピー（この部門）</button>
+        <button id="dlOne" type="button">この画像を保存</button>
         <button id="dlAll" type="button" hidden>全試合ぶん保存</button>
         <span class="note" id="imgNote"></span>
+      </div>
+      <div class="bmbox">
+        <h2>ジャケット入りの告知画像を作る</h2>
+        <p class="note">ジャケットは公式サイトの画像のため、このページでは「?」の枠で表示します（組み合わせ発表はジャケットを使わないので、ここで保存できます）。選曲公開と BAN結果・対戦曲は、maimaidx.jp の上で動く告知画像用のブックマークで作ってください。画像はそのブラウザの中で作るだけで、どこにも置きません。</p>
+        <ol class="note">
+          <li>下のボタンをブックマークバーへドラッグして登録する（できない場合は「コードをコピー」で、URL欄にコードを貼ったブックマークを作る）</li>
+          <li>ここで部門を選び「画像用データをコピー」を押す</li>
+          <li>maimaidx.jp にログインしたページでブックマークを押し、出てきた画面に貼り付けて「読み込む」</li>
+          <li>画像の種類と試合を選んで保存する</li>
+        </ol>
+        <div class="btns">
+          <a class="bmlink" id="bmLink" href="#">もぐカップ告知画像</a>
+          <button type="button" id="bmCopy">コードをコピー</button>
+        </div>
+        <p class="note">コードを貼るときは、URL欄の先頭が <code>javascript:</code> になっているか確かめてください。貼り付けると消えることがあります。組み合わせや選曲を変えたら、データをコピーし直してください。</p>
       </div>
     </section>
   </div>
 </main>
 <canvas id="cv" hidden></canvas>
 
-<script src="config.js?v=20261015b"></script>
-<script src="common.js?v=20261015b"></script>
-<script src="draw.js?v=20261015d"></script>
-<script src="admin.js?v=20261015b"></script>
+<script src="config.js?v=20261015e"></script>
+<script src="common.js?v=20261015e"></script>
+<script src="draw.js?v=20261015e"></script>
+<script src="admin.js?v=20261015e"></script>
 </body>
 </html>

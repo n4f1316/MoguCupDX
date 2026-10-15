@@ -517,19 +517,32 @@ async function renderImage() {
   const ms = divMatches();
   const per = kind !== 'pair';
   $('#imgMatchWrap').hidden = !per;
-  $('#dlAll').hidden = !per || ms.length < 2;
+  // ジャケットを使う画像は、ここでは保存させずブックマークで作ってもらう
+  $('#dlOne').hidden = per;
+  $('#dlAll').hidden = true;
   imgIdx = Math.min(imgIdx, Math.max(0, ms.length - 1));
   $('#imgMatch').innerHTML = ms.map((m, i) => `<option value="${i}"${i === imgIdx ? ' selected' : ''}>MATCH ${String(i + 1).padStart(2, '0')}　${esc(nameOf(m.a, 'A'))} vs ${esc(nameOf(m.b, 'B'))}</option>`).join('');
   const seq = ++renderSeq;
   await DrawKit.render($('#cv'), viewModel(), kind, imgIdx);
   if (seq !== renderSeq) return;
-  try {
-    $('#out').src = $('#cv').toDataURL('image/png');
-    $('#imgNote').textContent = '';
-  } catch {
-    $('#imgNote').textContent = 'ジャケット画像の読み込みに問題があり、画像を書き出せませんでした';
-  }
+  $('#out').src = $('#cv').toDataURL('image/png');
+  $('#imgNote').textContent = per ? 'プレビュー（ジャケットなし）。保存はブックマークで行います' : '';
 }
+
+// 告知画像用ブックマーク：maimaidx.jp の上で bookmark-image.js を読み込む
+const BM_BASE = new URL('.', location.href.split('?')[0]).href;
+const BM_CODE = `javascript:(()=>{const s=document.createElement('script');s.charset='utf-8';s.src='${BM_BASE}bookmark-image.js?'+Date.now();document.body.appendChild(s)})()`;
+$('#bmLink').href = BM_CODE;
+$('#bmLink').onclick = (e) => { e.preventDefault(); setMsg('このボタンはブックマークバーへドラッグして登録してください', 'ok'); };
+$('#bmCopy').onclick = async () => {
+  try { await navigator.clipboard.writeText(BM_CODE); setMsg('ブックマーク用のコードをコピーしました', 'ok'); }
+  catch { prompt('このコードをコピーしてください', BM_CODE); }
+};
+$('#copyData').onclick = async () => {
+  const data = JSON.stringify({ app: 'mogucup-image', v: 1, file: `${safe(settings.title || 'mogucup')}_${safe(divName(curDiv))}`, view: viewModel() });
+  try { await navigator.clipboard.writeText(data); setMsg(`${divName(curDiv)}の画像用データをコピーしました。maimaidx.jp でブックマークを押して貼り付けてください`, 'ok'); }
+  catch { setMsg('コピーできませんでした。ブラウザのクリップボードの許可を確認してください', 'err'); }
+};
 $('#kindTabs').addEventListener('click', (e) => {
   const b = e.target.closest('[data-kind]'); if (!b) return;
   kind = b.dataset.kind;

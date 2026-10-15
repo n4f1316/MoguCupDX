@@ -2,8 +2,6 @@
 window.MOGU_API = 'https://mogucupdx.want131611.workers.dev/';
 // 曲名・ジャケット・譜面定数のデータ（2fRATE と共用。同じ github.io なのでそのまま読める）
 window.MOGU_DATA = '/dxscore-tools/';
-// 告知画像のジャケットは Worker 経由で読む（デモのときも本番の Worker を使う）
-window.MOGU_JACKET = window.MOGU_API;
 
 // ---------- デモモード（URL の末尾に ?demo=1） ----------
 // 本物の Worker のコードをブラウザの中だけで動かす。サーバーには何も送らない

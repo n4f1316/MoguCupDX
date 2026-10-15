@@ -1,12 +1,16 @@
 // 告知画像の描画（canvas）。画像そのものは常に同じ配色（青みのある白＋青）
-const DrawKit = (() => {
+// 運営ページ（プレビュー、ジャケットなし）と、maimaidx.jp 上で動く告知画像用ブックマーク（ジャケットあり）の両方で使う。
+// ブックマークでは common.js を読まないので、必要な値はここに持つ。
+var DrawKit = window.DrawKit || (() => {
+  const DIFF_COLOR = { BASIC: '#2e9e5b', ADVANCED: '#c98200', EXPERT: '#e0434b', MASTER: '#8e44d6', 'Re:MASTER': '#a679e0' };
+  const fmtConst = (c) => (Math.round(c * 10) / 10).toFixed(1);
   const C = { bg1: '#f6f9fd', bg2: '#e4eef8', hole: 'rgba(42,111,184,.06)', card: '#ffffff', card2: '#eef5fc', fg: '#1f2d3d', mute: '#5b6f86', accent: '#2a6fb8', ban: '#d93a49', gold: '#f0b429', goldText: '#9a6400', jk: '#dbe7f3', line: '#d6e2ee', onAccent: '#ffffff' };
   const FD = '"M PLUS Rounded 1c","Hiragino Maru Gothic ProN",sans-serif';
   const FB = '"Zen Kaku Gothic New","Hiragino Sans","Noto Sans JP",sans-serif';
   const FM = '"JetBrains Mono",monospace';
   const W = 1600;
   let cv, ctx, V, logo = null;
-  const LOGO_URL = 'logo3rd.svg?v=1';
+  const LOGO_URL = (window.MOGU_ASSETS || '') + 'logo3rd.svg?v=1';
 
   const imgCache = new Map();
   function loadImg(url) {
@@ -23,17 +27,12 @@ const DrawKit = (() => {
     return imgCache.get(url);
   }
 
-  // ジャケット：まず Worker 経由、だめなら公式から直接（CORS が許可されていれば描ける）
-  const DIRECT_BASES = ['https://maimaidx.jp/maimai-mobile/img/Music/', 'https://maimai.sega.jp/storage/DX_jacket/'];
+  // ジャケットは maimaidx.jp 上（同じサイトの画像なので canvas に描いて保存できる）でだけ読む。
+  // それ以外（運営ページのプレビュー）では「?」の枠にする。画像はこちらでは保存・公開しない
+  const ON_OFFICIAL = location.hostname === 'maimaidx.jp';
   async function loadJacket(img) {
-    if (!img) return null;
-    const viaWorker = await loadImg(jacketURL(img) + '?r=2');
-    if (viaWorker) return viaWorker;
-    for (const base of DIRECT_BASES) {
-      const im = await loadImg(base + img);
-      if (im) return im;
-    }
-    return null;
+    if (!img || !ON_OFFICIAL) return null;
+    return loadImg('/maimai-mobile/img/Music/' + img);
   }
 
   function rr(x, y, w, h, r) { ctx.beginPath(); ctx.roundRect(x, y, w, h, r); }
