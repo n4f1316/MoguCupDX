@@ -19,5 +19,5 @@ if (window.MOGU_DEMO) {
     if (url.startsWith(window.MOGU_API)) return (await window.__demoReady)(input, init);
     return window.__origFetch(input, init);
   };
-  document.write('<script type="module" src="demo/demo.js?v=demo4"><\/script>');
+  document.write('<script type="module" src="demo/demo.js?v=demo5"><\/script>');
 }
