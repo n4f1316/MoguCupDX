@@ -6,7 +6,7 @@
   const BASE = (document.currentScript && document.currentScript.src)
     ? new URL('.', document.currentScript.src).href
     : 'https://n4f1316.github.io/MoguCupDX/';
-  const VERSION = '20261015e';
+  const VERSION = '20261015h';
   const KINDS = [['pair', '組み合わせ発表'], ['reveal', '選曲公開'], ['final', 'BAN結果・対戦曲']];
   const KIND_NAME = { pair: '組み合わせ', reveal: '選曲公開', final: '対戦曲' };
 
@@ -70,11 +70,12 @@
       <div class="row"><button type="button" class="primary" id="load">読み込む</button><button type="button" id="paste">クリップボードから読み込む</button></div>
     </section>
     <section id="step2" hidden style="display:grid;gap:10px">
+      <div class="row" id="divs"></div>
       <div class="row" id="kinds"></div>
       <div class="row"><select id="match" aria-label="対象の試合"></select><button type="button" id="redo">データを貼り直す</button></div>
-      <div class="out"><img id="out" alt="告知画像"></div>
+      <div class="row"><button type="button" class="primary" id="dlOne">表示中の画像を保存</button></div>
       <p class="note">画像を長押し（パソコンは右クリック）でも保存できます。</p>
-      <div class="row"><button type="button" class="primary" id="dlOne">この画像を保存</button><button type="button" id="dlAll">全試合ぶん保存</button></div>
+      <div id="outs" style="display:grid;gap:10px"></div>
     </section>
     <p class="msg" id="msg" role="status" aria-live="polite"></p>
     <p class="note">非公式大会のツールです。ジャケット画像は maimaidx.jp の画像をこのブラウザの中で描いているだけで、外部には送りません。</p>
@@ -89,21 +90,25 @@
   $('close').onclick = close;
 
   const cv = document.createElement('canvas');
-  let data = null, kind = 'reveal', idx = 0, seq = 0;
+  const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  // sets：[{ div, file, view }]。divSel：部門の番号 or 'both'。sel：'all' または '部門の番号:試合の番号'
+  let sets = [], kind = 'reveal', divSel = 0, sel = 'all', seq = 0;
 
   function parse(text) {
     let d;
     try { d = JSON.parse(String(text).trim()); } catch { throw new Error('データの形が違います。運営ページで「画像用データをコピー」を押してから貼り付けてください'); }
-    if (!d || d.app !== 'mogucup-image' || !d.view || !Array.isArray(d.view.matches)) throw new Error('もぐらたたきカップの画像用データではありません');
-    return d;
+    if (!d || d.app !== 'mogucup-image') throw new Error('もぐらたたきカップの画像用データではありません');
+    const list = Array.isArray(d.sets) ? d.sets : d.view ? [{ file: d.file, view: d.view }] : [];
+    if (!list.length || !list.every((x) => x && x.view && Array.isArray(x.view.matches))) throw new Error('もぐらたたきカップの画像用データではありません');
+    return list;
   }
   async function useData(text) {
     try {
-      data = parse(text);
+      sets = parse(text);
       await drawReady;
       $('step1').hidden = true; $('step2').hidden = false;
-      const n = data.view.matches.length;
-      setMsg(`${data.view.badge || ''}　${n} 試合を読み込みました`, 'ok');
+      divSel = sets.length > 1 ? 'both' : 0; sel = 'all';
+      setMsg(sets.map((x) => `${x.view.badge || ''} ${x.view.matches.length}試合`).join('・') + ' を読み込みました', 'ok');
       buildControls();
       await render();
     } catch (e) { setMsg(e.message, 'err'); }
@@ -115,7 +120,17 @@
   };
   $('redo').onclick = () => { $('step1').hidden = false; $('step2').hidden = true; $('data').value = ''; $('data').focus(); setMsg(''); };
 
+  const shownSets = () => (divSel === 'both' ? sets.map((_, i) => i) : [divSel]);
   function buildControls() {
+    const total = sets.reduce((n, x) => n + x.view.matches.length, 0);
+    $('divs').innerHTML = sets.map((x, i) => `<button type="button" data-d="${i}" aria-pressed="${divSel === i}">${esc(x.view.badge || '部門' + (i + 1))} ${x.view.matches.length}試合</button>`).join('')
+      + (sets.length > 1 ? `<button type="button" data-d="both" aria-pressed="${divSel === 'both'}">両部門 ${total}試合</button>` : '');
+    $('divs').onclick = (e) => {
+      const b = e.target.closest('[data-d]'); if (!b) return;
+      divSel = b.dataset.d === 'both' ? 'both' : +b.dataset.d;
+      if (sel !== 'all') sel = '';
+      buildControls(); render();
+    };
     $('kinds').innerHTML = KINDS.map(([k, n]) => `<button type="button" data-k="${k}" aria-pressed="${k === kind}">${n}</button>`).join('');
     $('kinds').onclick = (e) => {
       const b = e.target.closest('[data-k]'); if (!b) return;
@@ -123,57 +138,74 @@
       root.querySelectorAll('#kinds button').forEach((x) => x.setAttribute('aria-pressed', x === b));
       render();
     };
-    const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-    $('match').innerHTML = data.view.matches.map((m, i) => `<option value="${i}">MATCH ${String(i + 1).padStart(2, '0')}　${esc(m.aName)} vs ${esc(m.bName)}</option>`).join('');
-    idx = Math.min(idx, Math.max(0, data.view.matches.length - 1));
-    $('match').value = String(idx);
-    $('match').onchange = (e) => { idx = +e.target.value; render(); };
+    const many = shownSets().length > 1;
+    const opts = shownSets().flatMap((si) => sets[si].view.matches.map((m, i) => ({
+      v: `${si}:${i}`,
+      t: `${many ? String(sets[si].view.badge || '').replace('部門', '') + '　' : ''}MATCH ${String(i + 1).padStart(2, '0')}　${m.aName} vs ${m.bName}`,
+    })));
+    if (sel !== 'all' && !opts.some((o) => o.v === sel)) sel = opts[0]?.v || 'all';
+    $('match').innerHTML = `<option value="all">全試合（${opts.length}試合）</option>` + opts.map((o) => `<option value="${o.v}">${esc(o.t)}</option>`).join('');
+    $('match').value = sel;
+    $('match').onchange = (e) => { sel = e.target.value; render(); };
   }
 
-  function missingJackets(k, i) {
-    if (k === 'pair') return 0;
-    const m = data.view.matches[i]; if (!m) return 0;
-    const songs = [...m.aSongs, ...m.bSongs, ...(k === 'final' ? m.finals.map((f) => f.s) : [])].filter(Boolean);
+  // いま表示する画像：[{ si, idx }]
+  function targets() {
+    const ss = shownSets();
+    if (kind === 'pair') return ss.map((si) => ({ si, idx: 0 }));
+    if (sel === 'all') return ss.flatMap((si) => sets[si].view.matches.map((_, idx) => ({ si, idx })));
+    const [si, i] = sel.split(':').map(Number);
+    return sets[si]?.view.matches[i] ? [{ si, idx: i }] : [];
+  }
+  function missingJackets(t) {
+    if (kind === 'pair') return 0;
+    const m = sets[t.si].view.matches[t.idx]; if (!m) return 0;
+    const songs = [...m.aSongs, ...m.bSongs, ...(kind === 'final' ? m.finals.map((f) => f.s) : [])].filter(Boolean);
     return songs.filter((s) => !s.img).length;
   }
   async function render() {
-    const per = kind !== 'pair';
-    $('match').hidden = !per;
-    $('dlAll').hidden = !per || data.view.matches.length < 2;
+    $('match').hidden = kind === 'pair';
     const my = ++seq;
-    await window.DrawKit.render(cv, data.view, kind, idx);
-    if (my !== seq) return;
-    try {
-      $('out').src = cv.toDataURL('image/png');
-      const miss = missingJackets(kind, idx);
-      if (miss) setMsg(`ジャケットが決まらない譜面が ${miss} 件あります（同名曲など）。「?」の枠で描いています`, '');
-    } catch {
-      setMsg('画像を書き出せませんでした。ページを再読み込みしてから、もう一度ブックマークを押してください', 'err');
+    const ts = targets();
+    const outs = $('outs');
+    outs.innerHTML = ts.length ? '' : '<p class="note">対戦カードがありません</p>';
+    let miss = 0;
+    for (const t of ts) {
+      await window.DrawKit.render(cv, sets[t.si].view, kind, t.idx);
+      if (my !== seq) return;
+      const box = document.createElement('div');
+      box.className = 'out';
+      const img = document.createElement('img');
+      img.alt = fileName(t, kind);
+      try { img.src = cv.toDataURL('image/png'); } catch {
+        setMsg('画像を書き出せませんでした。ページを再読み込みしてから、もう一度ブックマークを押してください', 'err');
+        return;
+      }
+      box.appendChild(img); outs.appendChild(box);
+      miss += missingJackets(t);
     }
+    $('dlOne').textContent = ts.length > 1 ? `表示中の画像を保存（${ts.length}枚）` : 'この画像を保存';
+    $('dlOne').disabled = !ts.length;
+    if (miss) setMsg(`ジャケットが決まらない譜面が ${miss} 件あります（同名曲など）。「?」の枠で描いています`, '');
   }
 
   const safe = (s) => String(s || '').replace(/[\\/:*?"<>|\s]/g, '_');
-  const fileName = (k, i) => `${safe(data.file || 'mogucup')}_${KIND_NAME[k]}${k === 'pair' ? '' : '_M' + String(i + 1).padStart(2, '0')}.png`;
-  async function download(k, i) {
-    await window.DrawKit.render(cv, data.view, k, i);
+  const fileName = (t, k) => `${safe(sets[t.si].file || 'mogucup')}_${KIND_NAME[k]}${k === 'pair' ? '' : '_M' + String(t.idx + 1).padStart(2, '0')}.png`;
+  async function download(t, k) {
+    await window.DrawKit.render(cv, sets[t.si].view, k, t.idx);
     const blob = await new Promise((r) => { try { cv.toBlob(r, 'image/png'); } catch { r(null); } });
     if (!blob) throw new Error('画像を書き出せませんでした');
     const a = document.createElement('a');
-    a.href = URL.createObjectURL(blob); a.download = fileName(k, i);
+    a.href = URL.createObjectURL(blob); a.download = fileName(t, k);
     root.appendChild(a); a.click(); a.remove();
     setTimeout(() => URL.revokeObjectURL(a.href), 2000);
   }
   $('dlOne').onclick = async () => {
-    try { await download(kind, idx); setMsg('保存しました', 'ok'); } catch (e) { setMsg(e.message, 'err'); }
-    render();
-  };
-  $('dlAll').onclick = async () => {
-    const n = data.view.matches.length;
+    const ts = targets();
     try {
-      for (let i = 0; i < n; i++) { await download(kind, i); await new Promise((r) => setTimeout(r, 300)); }
-      setMsg(`${n} 枚保存しました`, 'ok');
+      for (const t of ts) { await download(t, kind); await new Promise((r) => setTimeout(r, 300)); }
+      setMsg(`${ts.length} 枚保存しました`, 'ok');
     } catch (e) { setMsg(e.message, 'err'); }
-    render();
   };
   $('data').focus();
 })();

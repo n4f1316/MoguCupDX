@@ -493,14 +493,17 @@ $('#pairRandom').onclick = pairAction($('#pairRandom'), () => {
   makePairs(a);
 });
 
-// ---------- 告知画像（部門ごと） ----------
-let kind = 'pair', imgIdx = 0;
-function viewModel() {
+// ---------- 告知画像（部門ごと・両部門） ----------
+let kind = 'pair';
+let imgDivSel = null;   // 'lime' | 'lemon' | 'both'（null のときは組み合わせタブの部門）
+let imgSel = '';        // 'all'（全試合）または '部門:番号'
+const imgDivs = () => (imgDivSel === 'both' ? DIVISIONS.map((d) => d.id) : [imgDivSel || curDiv]);
+function viewModel(div = curDiv) {
   readSettingsForm();
   const ch = (k) => (k && charts?.byKey.get(k)) || null;
   return {
-    title: settings.title, badge: divName(curDiv), badgeColor: DIV_COLOR[curDiv], notes: settings.notes,
-    matches: divMatches().map((m) => ({
+    title: settings.title, badge: divName(div), badgeColor: DIV_COLOR[div], notes: settings.notes,
+    matches: divMatches(div).map((m) => ({
       aName: nameOf(m.a, 'プレイヤーA'), bName: nameOf(m.b, 'プレイヤーB'),
       aSongs: m.aSongs.map(ch), bSongs: m.bSongs.map(ch), cap: m.cap, lv14: m.lv14,
       finals: finalSongs({
@@ -511,36 +514,67 @@ function viewModel() {
     })),
   };
 }
+// いま表示する画像の一覧：[{ div, idx }]
+function imgTargets() {
+  const divs = imgDivs();
+  if (kind === 'pair') return divs.map((div) => ({ div, idx: 0 }));
+  if (imgSel === 'all') return divs.flatMap((div) => divMatches(div).map((_, idx) => ({ div, idx })));
+  const [div, i] = imgSel.split(':');
+  return divs.includes(div) && divMatches(div)[+i] ? [{ div, idx: +i }] : [];
+}
+function imgDivTabs() {
+  const el = $('#imgDiv');
+  const sel = imgDivSel || curDiv;
+  el.innerHTML = DIVISIONS.map((d) => `<button type="button" data-div="${d.id}" aria-selected="${d.id === sel}">${divPill(d.id)} ${divMatches(d.id).length}試合</button>`).join('')
+    + `<button type="button" data-div="both" aria-selected="${sel === 'both'}">両部門 ${matches.length}試合</button>`;
+  el.onclick = (e) => {
+    const b = e.target.closest('[data-div]'); if (!b) return;
+    imgDivSel = b.dataset.div;
+    if (imgDivSel !== 'both') { curDiv = imgDivSel; renderMatches(); }
+    imgSel = imgSel === 'all' ? 'all' : '';
+    renderImage();
+  };
+}
 let renderSeq = 0;
 async function renderImage() {
-  divTabs($('#imgDiv'), () => { imgIdx = 0; renderImage(); renderMatches(); });
-  const ms = divMatches();
+  imgDivTabs();
   const per = kind !== 'pair';
+  const divs = imgDivs();
   $('#imgMatchWrap').hidden = !per;
   // ジャケットを使う画像は、ここでは保存させずブックマークで作ってもらう
   $('#dlOne').hidden = per;
-  $('#dlAll').hidden = true;
-  imgIdx = Math.min(imgIdx, Math.max(0, ms.length - 1));
-  $('#imgMatch').innerHTML = ms.map((m, i) => `<option value="${i}"${i === imgIdx ? ' selected' : ''}>MATCH ${String(i + 1).padStart(2, '0')}　${esc(nameOf(m.a, 'A'))} vs ${esc(nameOf(m.b, 'B'))}</option>`).join('');
+  // 対象の試合：全試合／各試合（両部門のときは部門名つき）
+  const opts = divs.flatMap((div) => divMatches(div).map((m, i) => ({ v: `${div}:${i}`, t: `${divs.length > 1 ? divName(div).replace('部門', '') + '　' : ''}MATCH ${String(i + 1).padStart(2, '0')}　${nameOf(m.a, 'A')} vs ${nameOf(m.b, 'B')}` })));
+  if (imgSel !== 'all' && !opts.some((o) => o.v === imgSel)) imgSel = opts[0]?.v || 'all';
+  $('#imgMatch').innerHTML = `<option value="all"${imgSel === 'all' ? ' selected' : ''}>全試合（${opts.length}試合）</option>`
+    + opts.map((o) => `<option value="${o.v}"${o.v === imgSel ? ' selected' : ''}>${esc(o.t)}</option>`).join('');
   const seq = ++renderSeq;
-  if (!per) {
-    // 組み合わせ発表はジャケットを使わないので画像にして表示する（長押し・右クリックで保存できる）
-    await DrawKit.render($('#cv'), viewModel(), kind, imgIdx);
-    if (seq !== renderSeq) return;
-    $('#out').src = $('#cv').toDataURL('image/png');
-    $('#out').hidden = false; $('#pv').hidden = true;
-    $('#imgNote').textContent = '画像を長押し（パソコンは右クリック）でも保存できます';
-    return;
+  const box = $('#previews');
+  const targets = imgTargets();
+  box.innerHTML = targets.length ? '' : '<p class="note">対戦カードがありません</p>';
+  for (const t of targets) {
+    const holder = document.createElement('div');
+    holder.className = 'canvasbox';
+    box.appendChild(holder);
+    const cv = document.createElement('canvas');
+    if (!per) {
+      // 組み合わせ発表はジャケットを使わないので画像にして表示する（長押し・右クリックで保存できる）
+      await DrawKit.render(cv, viewModel(t.div), kind, t.idx);
+      if (seq !== renderSeq) return;
+      const img = document.createElement('img');
+      img.alt = `${divName(t.div)} 組み合わせ発表`;
+      img.src = cv.toDataURL('image/png');
+      holder.appendChild(img);
+    } else {
+      // 選曲公開・対戦曲は表示用に描く（ジャケットは公式から表示用に読む。この画面からは保存できない）
+      await DrawKit.render(cv, viewModel(t.div), kind, t.idx, { preview: true });
+      if (seq !== renderSeq) return;
+      cv.setAttribute('role', 'img');
+      cv.setAttribute('aria-label', `${divName(t.div)} MATCH ${t.idx + 1} のプレビュー`);
+      holder.appendChild(cv);
+    }
   }
-  // 選曲公開・対戦曲は画面の canvas に直接描く（ジャケットは公式から表示用に読む。この画面からは保存できない）
-  const pv = document.createElement('canvas');
-  await DrawKit.render(pv, viewModel(), kind, imgIdx, { preview: true });
-  if (seq !== renderSeq) return;
-  const out = $('#pv');
-  out.width = pv.width; out.height = pv.height;
-  out.getContext('2d').drawImage(pv, 0, 0);
-  $('#out').hidden = true; out.hidden = false;
-  $('#imgNote').textContent = 'プレビューです。ジャケット入りの画像の保存はブックマークで行います';
+  $('#imgNote').textContent = per ? 'プレビューです。ジャケット入りの画像の保存はブックマークで行います' : '画像を長押し（パソコンは右クリック）でも保存できます';
 }
 
 // 告知画像用ブックマーク：maimaidx.jp の上で bookmark-image.js を読み込む
@@ -553,8 +587,11 @@ $('#bmCopy').onclick = async () => {
   catch { prompt('このコードをコピーしてください', BM_CODE); }
 };
 $('#copyData').onclick = async () => {
-  const data = JSON.stringify({ app: 'mogucup-image', v: 1, file: `${safe(settings.title || 'mogucup')}_${safe(divName(curDiv))}`, view: viewModel() });
-  try { await navigator.clipboard.writeText(data); setMsg(`${divName(curDiv)}の画像用データをコピーしました。maimaidx.jp でブックマークを押して貼り付けてください`, 'ok'); }
+  const base = safe(settings.title || 'mogucup');
+  const divs = imgDivs();
+  const data = JSON.stringify({ app: 'mogucup-image', v: 2, sets: divs.map((div) => ({ div, file: `${base}_${safe(divName(div))}`, view: viewModel(div) })) });
+  const label = divs.length > 1 ? '両部門' : divName(divs[0]);
+  try { await navigator.clipboard.writeText(data); setMsg(`${label}の画像用データをコピーしました。maimaidx.jp でブックマークを押して貼り付けてください`, 'ok'); }
   catch { setMsg('コピーできませんでした。ブラウザのクリップボードの許可を確認してください', 'err'); }
 };
 $('#kindTabs').addEventListener('click', (e) => {
@@ -563,27 +600,26 @@ $('#kindTabs').addEventListener('click', (e) => {
   $$('#kindTabs button').forEach((x) => x.setAttribute('aria-selected', x === b));
   renderImage();
 });
-$('#imgMatch').onchange = (e) => { imgIdx = +e.target.value; renderImage(); };
+$('#imgMatch').onchange = (e) => { imgSel = e.target.value; renderImage(); };
 
 const KIND_NAME = { pair: '組み合わせ', reveal: '選曲公開', final: '対戦曲' };
 const safe = (s) => String(s || '').replace(/[\\/:*?"<>|\s]/g, '_');
-const fileName = (k, i) => `${safe(settings.title || 'mogucup')}_${safe(divName(curDiv))}_${KIND_NAME[k]}${k === 'pair' ? '' : '_M' + String(i + 1).padStart(2, '0')}.png`;
-async function download(k, i) {
-  await DrawKit.render($('#cv'), viewModel(), k, i);
+const fileName = (div, k, i) => `${safe(settings.title || 'mogucup')}_${safe(divName(div))}_${KIND_NAME[k]}${k === 'pair' ? '' : '_M' + String(i + 1).padStart(2, '0')}.png`;
+async function download(div, k, i) {
+  await DrawKit.render($('#cv'), viewModel(div), k, i);
   const blob = await new Promise((r) => $('#cv').toBlob(r, 'image/png'));
   if (!blob) throw new Error('画像を書き出せませんでした');
   const a = document.createElement('a');
-  a.href = URL.createObjectURL(blob); a.download = fileName(k, i); a.click();
+  a.href = URL.createObjectURL(blob); a.download = fileName(div, k, i); a.click();
   setTimeout(() => URL.revokeObjectURL(a.href), 2000);
 }
-$('#dlOne').onclick = async () => { try { await download(kind, imgIdx); } catch (e) { setMsg(e.message, 'err'); } renderImage(); };
-$('#dlAll').onclick = async () => {
-  const n = divMatches().length;
+// 表示中の組み合わせ発表をすべて保存（両部門なら2枚）
+$('#dlOne').onclick = async () => {
+  const ts = imgTargets();
   try {
-    for (let i = 0; i < n; i++) { await download(kind, i); await new Promise((r) => setTimeout(r, 300)); }
-    setMsg(`${n} 枚保存しました`, 'ok');
+    for (const t of ts) { await download(t.div, kind, t.idx); await new Promise((r) => setTimeout(r, 300)); }
+    setMsg(`${ts.length} 枚保存しました`, 'ok');
   } catch (e) { setMsg(e.message, 'err'); }
-  renderImage();
 };
 
 if (KEY) start(false);
