@@ -1,7 +1,7 @@
 // デモモード：本物の worker.js を、ブラウザの中のデータベースにつないで動かす
 // （サーバーには何も送らない。データはこのブラウザの localStorage にだけ保存）
-import worker from '../worker/worker.js?v=demo4';
-import { makeDB, emptyData } from './memdb.js?v=demo4';
+import worker from '../worker/worker.js?v=demo5';
+import { makeDB, emptyData } from './memdb.js?v=demo5';
 
 const STORE = 'mogucupdx-demo-db';
 const ADMIN_KEY = 'demo';
@@ -24,9 +24,11 @@ const SEED = [
   { u: 'demo_kouhai', name: 'ほりほり後輩', x: 'horihori', d: 'horihori', rating: 16120, frate: 14.230, divs: ['lemon'], plates: ['真'], lemon: { ap14: 55, ap14p: 14 } },
 ];
 
+// デモの中身の版。古い版のまま残っている・準備の途中で失敗したデータは作り直す
+const DEMO_VERSION = 4;
 let data;
 try { data = JSON.parse(localStorage.getItem(STORE)); } catch { data = null; }
-const fresh = !data;
+const fresh = !data || data.demoVersion !== DEMO_VERSION || !data.entries?.length;
 if (fresh) data = emptyData();
 let dirty = false;
 const save = () => { try { localStorage.setItem(STORE, JSON.stringify(data)); } catch {} dirty = false; };
@@ -196,7 +198,7 @@ function currentUser() {
 
 (async () => {
   if (fresh) {
-    try { await seed(); } catch (e) { console.error(e); }
+    try { await seed(); data.demoVersion = DEMO_VERSION; } catch (e) { console.error(e); }
     save();
   }
   window.__demoResolve(handle);
