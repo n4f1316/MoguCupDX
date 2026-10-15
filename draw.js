@@ -1,49 +1,25 @@
-// 告知画像の描画（canvas）。画像そのものは常に同じ配色（青みのある白＋青）
-// 運営ページ（プレビュー、ジャケットなし）と、maimaidx.jp 上で動く告知画像用ブックマーク（ジャケットあり）の両方で使う。
-// ブックマークでは common.js を読まないので、必要な値はここに持つ。
-var DrawKit = window.DrawKit || (() => {
-  const DIFF_COLOR = { BASIC: '#2e9e5b', ADVANCED: '#c98200', EXPERT: '#e0434b', MASTER: '#8e44d6', 'Re:MASTER': '#a679e0' };
-  const fmtConst = (c) => (Math.round(c * 10) / 10).toFixed(1);
-  const C = { bg1: '#f6f9fd', bg2: '#e4eef8', hole: 'rgba(42,111,184,.06)', card: '#ffffff', card2: '#eef5fc', fg: '#1f2d3d', mute: '#5b6f86', accent: '#2a6fb8', ban: '#d93a49', gold: '#f0b429', goldText: '#9a6400', jk: '#dbe7f3', line: '#d6e2ee', onAccent: '#ffffff' };
+// 告知画像の描画（canvas）。画像そのものは常に同じ配色（暗い土色＋オレンジ）
+const DrawKit = (() => {
+  const C = { bg1: '#211a14', bg2: '#33261b', hole: 'rgba(0,0,0,.22)', card: '#3d2e22', card2: '#4a382a', fg: '#fbf2e6', mute: '#c4ac93', accent: '#ff8a3d', ban: '#ff4d5e', gold: '#ffc861', jk: '#2a2019' };
   const FD = '"M PLUS Rounded 1c","Hiragino Maru Gothic ProN",sans-serif';
   const FB = '"Zen Kaku Gothic New","Hiragino Sans","Noto Sans JP",sans-serif';
   const FM = '"JetBrains Mono",monospace';
   const W = 1600;
-  let cv, ctx, V, logo = null;
-  const LOGO_URL = (window.MOGU_ASSETS || '') + 'logo3rd.svg?v=1';
+  let cv, ctx, V;
 
   const imgCache = new Map();
-  // cors：true なら CORS 付きで読む（canvas を保存できる）。false は表示専用（保存できなくなる）
-  function loadImg(url, cors = true) {
+  function loadImg(url) {
     if (!url) return Promise.resolve(null);
-    const key = (cors ? 'c:' : 'p:') + url;
-    if (!imgCache.has(key)) {
-      imgCache.set(key, new Promise((res) => {
+    if (!imgCache.has(url)) {
+      imgCache.set(url, new Promise((res) => {
         const im = new Image();
-        if (cors) im.crossOrigin = 'anonymous';
+        im.crossOrigin = 'anonymous';
         im.onload = () => res(im);
         im.onerror = () => res(null);
         im.src = url;
       }));
     }
-    return imgCache.get(key);
-  }
-
-  // ジャケット
-  //   maimaidx.jp 上（告知画像用ブックマーク）：同じサイトの画像なので、描いてそのまま保存できる
-  //   運営ページのプレビュー（opt.preview）：公式の画像を表示用に読む。この canvas は保存できない
-  //   それ以外：「?」の枠。画像はこちらでは保存・公開しない
-  const ON_OFFICIAL = location.hostname === 'maimaidx.jp';
-  const PREVIEW_BASES = ['https://maimaidx.jp/maimai-mobile/img/Music/', 'https://maimai.sega.jp/storage/DX_jacket/'];
-  async function loadJacket(img, preview) {
-    if (!img) return null;
-    if (ON_OFFICIAL) return loadImg('/maimai-mobile/img/Music/' + img);
-    if (!preview) return null;
-    for (const base of PREVIEW_BASES) {
-      const im = await loadImg(base + img, false);
-      if (im) return im;
-    }
-    return null;
+    return imgCache.get(url);
   }
 
   function rr(x, y, w, h, r) { ctx.beginPath(); ctx.roundRect(x, y, w, h, r); }
@@ -55,40 +31,30 @@ var DrawKit = window.DrawKit || (() => {
   }
   function base(h, heading) {
     cv.width = W; cv.height = h;
-    ctx.fillStyle = C.bg1; ctx.fillRect(0, 0, W, h);
-    // 大会アイコンを薄く（85% 透過）背景に敷く
-    if (logo) {
-      const size = Math.min(h - 60, 920);
-      ctx.save(); ctx.globalAlpha = 0.15;
-      ctx.drawImage(logo, (W - size) / 2, (h - size) / 2, size, size);
-      ctx.restore();
-    }
+    const g = ctx.createLinearGradient(0, 0, 0, h);
+    g.addColorStop(0, C.bg1); g.addColorStop(1, C.bg2);
+    ctx.fillStyle = g; ctx.fillRect(0, 0, W, h);
+    ctx.fillStyle = C.hole; // もぐらの穴
+    for (let y = 60; y < h; y += 150) for (let x = (y / 150) % 2 ? 40 : 115; x < W; x += 150) { ctx.beginPath(); ctx.ellipse(x, y, 46, 16, 0, 0, Math.PI * 2); ctx.fill(); }
     ctx.fillStyle = C.accent; ctx.fillRect(0, 0, W, 10);
     ctx.textBaseline = 'alphabetic';
-    fit(V.title || 'もぐらたたきカップ', 80, 92, 1000, 34, 800, FD, 'left', C.mute);
+    fit(V.title || 'もぐらたたきカップ', 80, 92, 900, 34, 800, FD, 'left', C.mute);
     fit(heading, 80, 170, 1000, 72, 800, FD, 'left', C.fg);
-    if (V.badge) { // 右上の丸いラベル：部門名
+    if (V.round) {
       ctx.font = `800 34px ${FD}`;
-      const tw = Math.min(ctx.measureText(V.badge).width + 56, 420);
-      rr(W - 80 - tw, 112, tw, 64, 32); ctx.fillStyle = V.badgeColor || C.accent; ctx.fill();
-      fit(V.badge, W - 80 - tw / 2, 156, tw - 40, 34, 800, FD, 'center', V.badgeColor ? C.fg : C.onAccent);
+      const tw = Math.min(ctx.measureText(V.round).width + 56, 420);
+      rr(W - 80 - tw, 112, tw, 64, 32); ctx.fillStyle = C.accent; ctx.fill();
+      fit(V.round, W - 80 - tw / 2, 156, tw - 40, 34, 800, FD, 'center', C.bg1);
     }
     ctx.fillStyle = C.mute; ctx.globalAlpha = 0.35; ctx.fillRect(80, 206, W - 160, 2); ctx.globalAlpha = 1;
   }
-  // 右下に権利表記、左下に運営の一言
-  const CREDIT = '非公式大会 ／ 楽曲・ジャケット © SEGA';
-  function footer(h, text) {
-    ctx.font = `700 20px ${FB}`;
-    const cw = ctx.measureText(CREDIT).width;
-    fit(CREDIT, W - 80, h - 34, cw, 20, 700, FB, 'right', C.mute);
-    if (text) fit(text, 80, h - 34, W - 160 - cw - 32, 26, 700, FB, 'left', C.mute);
-  }
+  function footer(h, text) { if (text) fit(text, 80, h - 34, W - 160, 26, 700, FB, 'left', C.mute); }
   const label = (n) => 'MATCH ' + String(n).padStart(2, '0');
 
   // 譜面カード（ジャケット・難易度・定数・曲名）
   function songCard(s, x, y, w, h, opt = {}) {
     rr(x, y, w, h, 14); ctx.fillStyle = opt.hi ? C.card2 : C.card; ctx.fill();
-    if (opt.hi) { ctx.lineWidth = 4; ctx.strokeStyle = C.gold; ctx.stroke(); } else { ctx.lineWidth = 1.5; ctx.strokeStyle = C.line; ctx.stroke(); }
+    if (opt.hi) { ctx.lineWidth = 4; ctx.strokeStyle = C.gold; ctx.stroke(); }
     const dc = s ? DIFF_COLOR[s.diff] || C.mute : C.mute;
     ctx.save(); rr(x, y, w, h, 14); ctx.clip(); ctx.fillStyle = dc; ctx.fillRect(x, y, 12, h); ctx.restore();
     const js = h - 24, jx = x + 26, jy = y + 12;
@@ -96,7 +62,7 @@ var DrawKit = window.DrawKit || (() => {
     ctx.fillStyle = C.jk; ctx.fillRect(jx, jy, js, js);
     const im = s && opt.img;
     if (im) ctx.drawImage(im, jx, jy, js, js);
-    else { ctx.font = `800 ${js * 0.3}px ${FD}`; ctx.fillStyle = C.mute; ctx.textAlign = 'center'; ctx.fillText('?', jx + js / 2, jy + js * 0.62); }
+    else { ctx.font = `800 ${js * 0.3}px ${FD}`; ctx.fillStyle = C.card2; ctx.textAlign = 'center'; ctx.fillText('?', jx + js / 2, jy + js * 0.62); }
     ctx.restore();
     const tx = jx + js + 22, tw = x + w - tx - 20;
     if (s) {
@@ -112,17 +78,17 @@ var DrawKit = window.DrawKit || (() => {
       ctx.font = `500 ${fs}px ${FM}`; ctx.textAlign = 'left'; ctx.fillStyle = dc;
       ctx.fillText(meta, tx, y + 42);
       rr(tx + mw + 14, y + 42 - fs + 1, kw, fs + 4, 6); ctx.fillStyle = s.kind === 'DX' ? '#f6a23a' : '#4aa3e8'; ctx.fill();
-      ctx.font = `800 ${fs - 4}px ${FM}`; ctx.fillStyle = '#ffffff'; ctx.textAlign = 'center'; ctx.fillText(s.kind, tx + mw + 14 + kw / 2, y + 41);
+      ctx.font = `800 ${fs - 4}px ${FM}`; ctx.fillStyle = C.bg1; ctx.textAlign = 'center'; ctx.fillText(s.kind, tx + mw + 14 + kw / 2, y + 41);
     }
     if (opt.tag) {
       ctx.font = `800 22px ${FD}`;
       const tgw = ctx.measureText(opt.tag).width + 28;
       rr(x + w - tgw - 16, y + 14, tgw, 36, 18); ctx.fillStyle = C.gold; ctx.fill();
-      ctx.fillStyle = C.fg; ctx.textAlign = 'center'; ctx.fillText(opt.tag, x + w - 16 - tgw / 2, y + 40);
+      ctx.fillStyle = C.bg1; ctx.textAlign = 'center'; ctx.fillText(opt.tag, x + w - 16 - tgw / 2, y + 40);
     }
     fit(s ? s.name : (opt.empty || '（未入力）'), tx, y + h - 26, tw, 38, 700, FB, 'left', s ? C.fg : C.mute);
     if (opt.ban) {
-      ctx.fillStyle = 'rgba(246,249,253,.72)'; rr(x, y, w, h, 14); ctx.fill();
+      ctx.fillStyle = 'rgba(20,12,8,.58)'; rr(x, y, w, h, 14); ctx.fill();
       ctx.strokeStyle = C.ban; ctx.lineWidth = 5;
       ctx.beginPath(); ctx.moveTo(x + 30, y + h / 2 + 6); ctx.lineTo(x + w - 30, y + h / 2 - 6); ctx.stroke();
       ctx.save(); ctx.translate(x + w / 2, y + h / 2); ctx.rotate(-0.08);
@@ -139,7 +105,7 @@ var DrawKit = window.DrawKit || (() => {
     base(h, '対戦組み合わせ');
     V.matches.forEach((m, i) => {
       const y = 250 + i * (rowH + gap);
-      rr(80, y, W - 160, rowH, 16); ctx.fillStyle = C.card; ctx.fill(); ctx.lineWidth = 1.5; ctx.strokeStyle = C.line; ctx.stroke();
+      rr(80, y, W - 160, rowH, 16); ctx.fillStyle = C.card; ctx.fill();
       ctx.font = `500 24px ${FM}`; ctx.fillStyle = C.accent; ctx.textAlign = 'left'; ctx.fillText(label(i + 1), 116, y + 62);
       fit(m.aName, W / 2 - 90, y + 68, 520, 48, 800, FD, 'right');
       fit(m.bName, W / 2 + 90, y + 68, 520, 48, 800, FD, 'left');
@@ -164,16 +130,15 @@ var DrawKit = window.DrawKit || (() => {
     });
     ctx.font = `800 56px ${FD}`; ctx.fillStyle = C.accent; ctx.textAlign = 'center';
     ctx.fillText('VS', W / 2, top + 18 + (cardH * 3 + 32) / 2 + 20);
-    if (m.cap != null) fit(`上限 定数${fmtConst(Number(m.cap))}${m.lv14 ? '＋Lv14 1曲' : ''}`, W - 80, top - 50, 520, 22, 500, FM, 'right', m.lv14 ? C.goldText : C.mute);
     return top + 18 + 3 * (cardH + 16);
   }
 
   function drawReveal(m, i, imgs) {
-    const h = 960;
+    const h = 920;
     base(h, `選曲公開　${label(i + 1)}`);
     const y = columns(m, 'reveal', imgs);
-    rr(80, y + 20, W - 160, 96, 16); ctx.fillStyle = C.card2; ctx.fill(); ctx.lineWidth = 1.5; ctx.strokeStyle = C.accent; ctx.stroke();
-    fit('相手の自選曲から1曲をBANしてください', W / 2, y + 82, W - 240, 38, 800, FD, 'center', C.accent);
+    rr(80, y + 20, W - 160, 96, 16); ctx.fillStyle = C.card2; ctx.fill();
+    fit('相手の自選曲から1曲をBANしてください', W / 2, y + 82, W - 240, 38, 800, FD, 'center', C.gold);
     footer(h, V.notes.reveal);
   }
 
@@ -183,27 +148,26 @@ var DrawKit = window.DrawKit || (() => {
     const y = columns(m, 'final', imgs) + 20;
     ctx.fillStyle = C.mute; ctx.globalAlpha = 0.35; ctx.fillRect(80, y, W - 160, 2); ctx.globalAlpha = 1;
     fit('対戦曲', 80, y + 60, 400, 40, 800, FD, 'left', C.fg);
-    const n = m.finals.length, ch = 170, cy = y + 124;
-    const cw = (W - 160 - 20 * (n - 1)) / n;
-    m.finals.forEach((f, k) => {
+    const cw = (W - 160 - 40) / 3, ch = 170, cy = y + 124;
+    const picked = (sd) => (m[sd + 'Pick'] >= 0 ? m[sd + 'Songs'][m[sd + 'Pick']] : null);
+    [[picked('a'), m.aName + ' の自選曲'], [picked('b'), m.bName + ' の自選曲'], [V.kadai, '運営課題曲']].forEach(([s, lab], k) => {
       const x = 80 + k * (cw + 20);
-      fit(f.label, x + 4, cy - 8, cw - 8, 24, 700, FB, 'left', f.kind === 'kadai' ? C.accent : f.kind === 'both' ? C.goldText : C.mute);
-      songCard(f.s, x, cy + 6, cw, ch, { hi: !!f.s, img: f.s && imgs.get(f.s.key), empty: '未定' });
+      fit(lab, x + 4, cy - 8, cw - 8, 24, 700, FB, 'left', k === 2 ? C.accent : C.mute);
+      songCard(s, x, cy + 6, cw, ch, { hi: !!s, img: s && imgs.get(s.key), empty: '未定' });
     });
     footer(h, V.notes.final);
   }
 
-  // view: { title, badge, notes, matches:[{ aName, bName, aSongs, bSongs, aBan, aPick, bBan, bPick, cap, finals:[{ s, label, kind }] }] }
-  async function render(canvas, view, kind, idx, opt = {}) {
+  // view: { title, round, notes, kadai, matches:[{ aName, bName, aSongs, bSongs, aBan, aPick, bBan, bPick }] }
+  async function render(canvas, view, kind, idx) {
     cv = canvas; ctx = cv.getContext('2d'); V = view;
-    if (!logo) logo = await loadImg(LOGO_URL);
     await Promise.all([`800 40px ${FD}`, `700 40px ${FB}`, `500 22px ${FM}`].map((f) => document.fonts.load(f, 'もぐらA'))).catch(() => {});
     if (kind === 'pair') { drawPair(); return; }
     const m = V.matches[idx];
     if (!m) { base(400, '対戦カードがありません'); return; }
-    const charts = [...m.aSongs, ...m.bSongs, ...(kind === 'final' ? m.finals.map((f) => f.s) : [])].filter(Boolean);
+    const charts = [...m.aSongs, ...m.bSongs, kind === 'final' ? V.kadai : null].filter(Boolean);
     const imgs = new Map();
-    await Promise.all(charts.map(async (s) => imgs.set(s.key, await loadJacket(s.img, opt.preview))));
+    await Promise.all(charts.map(async (s) => imgs.set(s.key, await loadImg(jacketURL(s.img)))));
     if (kind === 'reveal') drawReveal(m, idx, imgs); else drawFinal(m, idx, imgs);
   }
   return { render };
