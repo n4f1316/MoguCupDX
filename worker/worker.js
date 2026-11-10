@@ -42,6 +42,7 @@ const JACKET_BASES = [
 const CONSTS_URL = 'https://n4f1316.github.io/dxscore-tools/maimai_consts_magical.json';
 const RATE2F_URL = 'https://2frate.want131611.workers.dev/';
 const SESSION_DAYS = 30;
+const WORKER_VERSION = '2026-11-10c'; // 反映を確かめるための版（/api/public に出る）
 const PHASES = ['closed', 'select', 'ban', 'pick', 'done', 'play', 'result'];
 // 部門ごとの勝敗の決め方
 //   らいむ：失点（MAX − でらっくスコア ＋ CRITICAL PERFECT 以外の BREAK の数×2）の3曲合計が少ない方
@@ -95,7 +96,7 @@ async function route(req, env, url, ctx) {
   if (m === 'GET' && p === '/api/public') {
     const s = await getSettings(env);
     const { n } = await env.DB.prepare('SELECT COUNT(*) AS n FROM entries').first();
-    return json({ settings: publicSettings(s), entryCount: n });
+    return json({ settings: publicSettings(s), entryCount: n, version: WORKER_VERSION });
   }
   if (m === 'POST' && p === '/api/auth/register') return register(req, env);
   if (m === 'POST' && p === '/api/auth/login') return login(req, env);
