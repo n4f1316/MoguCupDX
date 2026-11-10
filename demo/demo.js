@@ -1,7 +1,7 @@
 // デモモード：本物の worker.js を、ブラウザの中のデータベースにつないで動かす
 // （サーバーには何も送らない。データはこのブラウザの localStorage にだけ保存）
-import worker from '../worker/worker.js?v=demo5';
-import { makeDB, emptyData } from './memdb.js?v=demo5';
+import worker from '../worker/worker.js?v=demo8';
+import { makeDB, emptyData } from './memdb.js?v=demo8';
 
 const STORE = 'mogucupdx-demo-db';
 const ADMIN_KEY = 'demo';
@@ -25,7 +25,7 @@ const SEED = [
 ];
 
 // デモの中身の版。古い版のまま残っている・準備の途中で失敗したデータは作り直す
-const DEMO_VERSION = 6;
+const DEMO_VERSION = 7;
 let data;
 try { data = JSON.parse(localStorage.getItem(STORE)); } catch { data = null; }
 const fresh = !data || data.demoVersion !== DEMO_VERSION || !data.entries?.length;
@@ -90,7 +90,7 @@ async function seed() {
 }
 
 // ---------- デモ用の操作バー ----------
-const PHASES = [['closed', '組み合わせ発表前'], ['select', '自選曲の提出'], ['ban', 'BAN'], ['pick', '自選曲の決定'], ['done', '対戦曲確定']];
+const PHASES = [['closed', '組み合わせ発表前'], ['select', '自選曲の提出'], ['ban', 'BAN'], ['pick', '自選曲の決定'], ['done', '対戦曲確定'], ['play', '対戦期間'], ['result', '結果発表']];
 const isAdmin = /admin\.html/.test(location.pathname);
 const go = (page) => { location.href = page + '?demo=1'; };
 
@@ -130,7 +130,29 @@ async function autoFill() {
     }
   }
   if (items.length) await call('api/admin/picks', { method: 'PUT', key: ADMIN_KEY, body: { items } });
-  return items.length;
+  // 対戦期間：ほかの参加者のリザルトを「承認待ち」で入れる（画像なし。運営ページで承認を試せる）
+  const res = [];
+  if (st.settings.phase === 'play') {
+    const hash = (k) => [...k].reduce((h, ch) => (h * 31 + ch.charCodeAt(0)) >>> 0, 7);
+    for (const m of st.matches) {
+      const pa = row(m, m.a), pb = row(m, m.b);
+      const aKey = pa.pick >= 0 ? pa.songs[pa.pick] : '', bKey = pb.pick >= 0 ? pb.songs[pb.pick] : '';
+      const same = aKey && aKey === bKey;
+      const finals = same ? [aKey, m.kadai, m.kadai2] : [aKey, bKey, ...(st.settings.format === 'mini' ? [] : [m.kadai])];
+      for (const self of [m.a, m.b]) {
+        if (self == null || self === myId) continue;
+        finals.forEach((key, slot) => {
+          if (!key || st.results?.some((r) => r.match_id === m.id && r.entry_id === self && r.slot === slot)) return;
+          const max = (700 + (hash(key) % 400)) * 3; // 譜面ごとに決まった MAX（2,100〜3,297）
+          res.push(m.div === 'lime'
+            ? { match_id: m.id, entry_id: self, slot, song_key: key, dx: max - 20 - Math.floor(Math.random() * 200), dx_max: max, status: 'pending' }
+            : { match_id: m.id, entry_id: self, slot, song_key: key, ach: (100.3 + Math.random() * 0.7).toFixed(4), status: 'pending' });
+        });
+      }
+    }
+    if (res.length) await call('api/admin/results', { method: 'PUT', key: ADMIN_KEY, body: { items: res } });
+  }
+  return items.length + res.length;
 }
 
 async function nextPhase() {

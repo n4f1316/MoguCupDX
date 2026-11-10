@@ -6,11 +6,13 @@ const uniqueErr = () => new Error('D1_ERROR: UNIQUE constraint failed');
 const norm = (sql) => sql.replace(/\s+/g, ' ').trim();
 
 export function emptyData() {
-  return { seq: { entries: 0, users: 0 }, entries: [], users: [], sessions: [], login_fails: [], picks: [], kv: [] };
+  return { seq: { entries: 0, users: 0 }, entries: [], users: [], sessions: [], login_fails: [], picks: [], kv: [], results: [] };
 }
 
 export function makeDB(data, onWrite) {
   const T = data;
+  T.results ||= [];
+  const rKey = (m, e, sl) => (x) => x.match_id === m && x.entry_id === e && x.slot === sl;
   const one = (rows) => rows[0] ?? null;
   const byUser = (id) => T.users.find((u) => u.id === id);
 
@@ -76,6 +78,27 @@ export function makeDB(data, onWrite) {
     },
     'DELETE FROM picks WHERE entry_id=?': ([e]) => { T.picks = T.picks.filter((p) => p.entry_id !== e); return { write: true }; },
 
+    // リザルト
+    "INSERT INTO results (match_id, entry_id, slot, song_key, dx, dx_max, ach, image, status, reason, submitted_at, reviewed_at, reviewer, ver) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending', '', datetime('now'), NULL, '', ?) ON CONFLICT(match_id, entry_id, slot) DO UPDATE SET song_key=excluded.song_key, dx=excluded.dx, dx_max=excluded.dx_max, ach=excluded.ach, image=excluded.image, status='pending', reason='', submitted_at=excluded.submitted_at, reviewed_at=NULL, reviewer='', ver=excluded.ver": ([m, e, sl, k, dx, mx, ach, img, ver]) => {
+      T.results = T.results.filter((x) => !rKey(m, e, sl)(x));
+      T.results.push({ match_id: m, entry_id: e, slot: sl, song_key: k, dx, dx_max: mx, ach, image: img, status: 'pending', reason: '', submitted_at: now(), reviewed_at: null, reviewer: '', ver });
+      return { write: true };
+    },
+    "INSERT INTO results (match_id, entry_id, slot, song_key, image, status, ver) VALUES (?, ?, ?, ?, '', 'pending', ?) ON CONFLICT DO NOTHING": ([m, e, sl, k, ver]) => {
+      if (!T.results.some(rKey(m, e, sl))) T.results.push({ match_id: m, entry_id: e, slot: sl, song_key: k, dx: null, dx_max: null, ach: null, image: '', status: 'pending', reason: '', submitted_at: now(), reviewed_at: null, reviewer: '', ver });
+      return { write: true };
+    },
+    'SELECT slot, song_key, dx, dx_max, ach, status, reason, submitted_at FROM results WHERE match_id=? AND entry_id=?': ([m, e]) => ({
+      rows: T.results.filter((x) => x.match_id === m && x.entry_id === e).map(({ slot, song_key, dx, dx_max, ach, status, reason, submitted_at }) => ({ slot, song_key, dx, dx_max, ach, status, reason, submitted_at })),
+    }),
+    'SELECT match_id, entry_id, slot, song_key, dx, dx_max, ach, status, reason, submitted_at, reviewed_at, reviewer, length(image) AS img FROM results': () => ({
+      rows: T.results.map(({ image, ver, ...r }) => ({ ...r, img: (image || '').length })),
+    }),
+    'SELECT image FROM results WHERE match_id=? AND entry_id=? AND slot=?': ([m, e, sl]) => ({ rows: T.results.filter(rKey(m, e, sl)).map((x) => ({ image: x.image })) }),
+    'SELECT ver, status FROM results WHERE match_id=? AND entry_id=? AND slot=?': ([m, e, sl]) => ({ rows: T.results.filter(rKey(m, e, sl)).map((x) => ({ ver: x.ver, status: x.status })) }),
+    'DELETE FROM results WHERE match_id=? AND entry_id=? AND slot=?': ([m, e, sl]) => { T.results = T.results.filter((x) => !rKey(m, e, sl)(x)); return { write: true }; },
+    'DELETE FROM results WHERE entry_id=?': ([e]) => { T.results = T.results.filter((x) => x.entry_id !== e); return { write: true }; },
+
     'SELECT value FROM kv WHERE key=?': ([k]) => ({ rows: T.kv.filter((x) => x.key === k).map((x) => ({ value: x.value })) }),
     "INSERT INTO kv (key, value, updated_at) VALUES (?, ?, datetime('now')) ON CONFLICT(key) DO UPDATE SET value=excluded.value, updated_at=excluded.updated_at": ([k, v]) => {
       const r = T.kv.find((x) => x.key === k);
@@ -95,6 +118,22 @@ export function makeDB(data, onWrite) {
         const [mid, eid] = a.slice(cols.length);
         const p = T.picks.find((x) => x.match_id === mid && x.entry_id === eid);
         if (p) { cols.forEach((c, i) => (p[c] = a[i])); p.updated_at = now(); }
+        return { write: true };
+      };
+    }
+    // UPDATE results SET 列=?, ... も同じ
+    const mr = !h && s.match(/^UPDATE results SET (.+?)(, reviewed_at=datetime\('now'\)(, reviewer='([^']*)'|, reviewer=\?)?)? WHERE match_id=\? AND entry_id=\? AND slot=\?$/);
+    if (mr) {
+      const cols = mr[1].split(',').map((c) => c.trim().replace(/=\?$/, ''));
+      const reviewed = !!mr[2], fixedReviewer = mr[4], argReviewer = mr[3] === ', reviewer=?';
+      h = (a) => {
+        const n = cols.length + (argReviewer ? 1 : 0);
+        const [mid, eid, sl] = a.slice(n);
+        const r = T.results.find(rKey(mid, eid, sl));
+        if (r) {
+          cols.forEach((c, i) => (r[c] = a[i]));
+          if (reviewed) { r.reviewed_at = now(); r.reviewer = argReviewer ? a[cols.length] : fixedReviewer; }
+        }
         return { write: true };
       };
     }

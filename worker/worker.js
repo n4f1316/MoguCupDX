@@ -12,6 +12,9 @@
 //   POST /api/me/songs               { songs: [譜面キー×3] }   段階「自選曲の提出」
 //   POST /api/me/ban                 { index }                  段階「BAN」（相手の自選曲の番号）
 //   POST /api/me/pick                { index }                  段階「自選曲の決定」（自分の自選曲の番号）
+//   POST /api/me/result              { slot, dx, dxMax, ach, image }  段階「対戦期間」（対戦曲の番号ごとのリザルト）
+// Discord（ボタンでの承認）:
+//   POST /discord/interactions       Discord から送られる操作（署名を確かめてから処理）
 // 運営（Authorization: Bearer <ADMIN_KEY>）:
 //   GET    /api/admin/entries
 //   PUT    /api/admin/entries/:id
@@ -20,9 +23,13 @@
 //   PUT    /api/admin/state          { settings?, matches? }
 //   PUT    /api/admin/picks          { items: [{ match_id, entry_id, songs, ban, pick }] }
 //   POST   /api/admin/reset-pin      { username }  このツールで作ったユーザーの仮PINを発行
+//   GET    /api/admin/result-image?match_id=&entry_id=&slot=   リザルト画像
+//   PUT    /api/admin/results        { items: [{ match_id, entry_id, slot, status?, dx?, dx_max?, ach?, reason?, remove? }] }
 //
 // 設定: D1 バインディング DB、シークレット ADMIN_KEY、変数 ALLOWED_ORIGINS
 // 任意: サービスバインディング RATE2F（2fRATE の Worker）。無ければ RATE2F_URL に直接送る
+// 任意: Discord でリザルトを承認する場合は、シークレット DISCORD_BOT_TOKEN と
+//       変数 DISCORD_CHANNEL_ID・DISCORD_PUBLIC_KEY（・承認できるロールを絞るなら DISCORD_APPROVER_ROLE）
 
 // ジャケットの取得先（上から順に試す）。
 // maimaidx.jp は証明書の都合で Worker からの https が失敗する（526）ため、http も試す。
@@ -35,7 +42,9 @@ const JACKET_BASES = [
 const CONSTS_URL = 'https://n4f1316.github.io/dxscore-tools/maimai_consts_magical.json';
 const RATE2F_URL = 'https://2frate.want131611.workers.dev/';
 const SESSION_DAYS = 30;
-const PHASES = ['closed', 'select', 'ban', 'pick', 'done'];
+const PHASES = ['closed', 'select', 'ban', 'pick', 'done', 'play', 'result'];
+// 部門ごとの勝敗の決め方：らいむ＝でらっくスコアの失点（MAX との差）の合計が少ない方、れもん＝達成率の合計が高い方
+const METRIC = { lime: 'dx', lemon: 'ach' };
 
 const DEFAULT_SETTINGS = {
   title: '第3回 もぐらたたきカップ',
@@ -43,7 +52,7 @@ const DEFAULT_SETTINGS = {
   entryOpen: true,
   entryDeadline: '',   // 例 "2026-11-01T23:59"（日本時間）。空なら期限なし
   notice: '',          // 参加者ページに出すお知らせ
-  phase: 'closed',     // closed：組み合わせ非公開 / select：自選曲の提出 / ban：BAN / pick：自選曲の決定 / done：対戦曲の確定
+  phase: 'closed',     // closed：組み合わせ非公開 / select：自選曲の提出 / ban：BAN / pick：自選曲の決定 / done：対戦曲の確定 / play：対戦期間（リザルト提出） / result：結果発表
   phaseNote: '',       // 段階の締切など、参加者ページに出す一言
   // 部門ごとの、新しく作る対戦カードの既定値（上限・運営課題曲・運営課題曲2）
   divDefaults: { lime: { cap: 13.9, kadai: '', kadai2: '' }, lemon: { cap: 14.9, kadai: '', kadai2: '' } },
@@ -52,18 +61,19 @@ const DEFAULT_SETTINGS = {
     pair: '自選曲を3曲選んで提出してください',
     reveal: '相手の自選曲から1曲を選んで、BANを提出してください',
     ban: 'BANされなかった2曲から、自分の自選曲を1曲選んで提出してください',
+    result: '',
     final: '対戦曲は自選曲・他選曲・運営課題曲の3曲です',
   },
 };
 const PUBLIC_KEYS = ['title', 'round', 'entryOpen', 'entryDeadline', 'notice', 'phase', 'phaseNote', 'format', 'notes'];
 
 export default {
-  async fetch(req, env) {
+  async fetch(req, env, ctx) {
     const url = new URL(req.url);
     const cors = corsHeaders(req, env);
     if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers: cors });
     try {
-      const res = await route(req, env, url);
+      const res = await route(req, env, url, ctx);
       for (const [k, v] of Object.entries(cors)) res.headers.set(k, v);
       return res;
     } catch (e) {
@@ -74,7 +84,7 @@ export default {
   },
 };
 
-async function route(req, env, url) {
+async function route(req, env, url, ctx) {
   const p = url.pathname.replace(/\/+$/, '') || '/';
   if (req.method === 'GET' && p.startsWith('/jacket/')) return jacket(p.slice(8), url);
   const m = req.method;
@@ -96,6 +106,8 @@ async function route(req, env, url) {
   if (m === 'POST' && p === '/api/me/songs') return submitSongs(req, env, await requireUser(req, env));
   if (m === 'POST' && p === '/api/me/ban') return submitBan(req, env, await requireUser(req, env));
   if (m === 'POST' && p === '/api/me/pick') return submitPick(req, env, await requireUser(req, env));
+  if (m === 'POST' && p === '/api/me/result') return submitResult(req, env, await requireUser(req, env), ctx);
+  if (m === 'POST' && p === '/discord/interactions') return discordInteraction(req, env);
 
   if (p.startsWith('/api/admin/')) {
     await requireAdmin(req, env);
@@ -348,7 +360,20 @@ async function me(user, env) {
     oppSongs: ph >= 2 ? theirs.songs : null,                 // BAN の段階から公開
     bannedMine: ph >= 3 ? theirs.ban : null,                 // 相手に BAN された自分の曲（決定の段階から）
     oppPick: ph >= 4 ? theirs.pick : null,                   // 相手の自選曲（確定の段階から）
+    metric: METRIC[m.div] || 'ach',
+    // 対戦曲（譜面キー）。リザルトの「何曲目か」はこの並び（試合の A・B の順）で数える
+    finals: ph >= 4 ? finalsOf(m, m.a === c.e.id ? mine : theirs, m.a === c.e.id ? theirs : mine, c.s.format) : null,
   }));
+  // 対戦期間から：自分のリザルトの提出状況。結果発表から：相手の（承認済みの）リザルトも
+  for (const [i, x] of c.list.entries()) {
+    if (ph < PHASES.indexOf('play')) break;
+    const sel = 'SELECT slot, song_key, dx, dx_max, ach, status, reason, submitted_at FROM results WHERE match_id=? AND entry_id=?';
+    matches[i].myResults = (await env.DB.prepare(sel).bind(x.m.id, c.e.id).all()).results;
+    if (c.s.phase === 'result' && x.opp) {
+      matches[i].oppResults = (await env.DB.prepare(sel).bind(x.m.id, x.opp.id).all()).results
+        .filter((r) => r.status === 'approved').map(({ slot, song_key, dx, dx_max, ach }) => ({ slot, song_key, dx, dx_max, ach, status: 'approved' }));
+    }
+  }
   const entryView = c.e && { entryName: c.e.entry_name, xId: c.e.x_id, rating: c.e.rating, frate: c.e.frate, answers: JSON.parse(c.e.answers || '{}') };
   return json({ user: userView(user), settings: publicSettings(c.s), entry: entryView, matches });
 }
@@ -399,6 +424,166 @@ async function submitPick(req, env, user) {
   return json({ ok: true });
 }
 
+// ============================================================
+//  リザルト（対戦期間）
+// ============================================================
+
+// 対戦曲の一覧（譜面キー）。並びは参加者・運営ページの finalSongs と同じ
+function finalsOf(m, pa, pb, format) {
+  const aKey = pa && pa.pick >= 0 ? pa.songs[pa.pick] || '' : '';
+  const bKey = pb && pb.pick >= 0 ? pb.songs[pb.pick] || '' : '';
+  const same = aKey && bKey && aKey === bKey;
+  const out = same ? [aKey] : [aKey, bKey];
+  if (format !== 'mini') { out.push(m.kadai || ''); if (same) out.push(m.kadai2 || ''); }
+  return out;
+}
+
+// 送られた値を確かめる。ach は達成率×10000 の整数（100.5432% → 1005432）
+function readValues(b, metric) {
+  const v = { dx: null, dx_max: null, ach: null };
+  const has = (x) => x !== undefined && x !== null && String(x).trim() !== '';
+  const int = (x) => Number(String(x).replace(/[,\s]/g, ''));
+  if (has(b.ach)) {
+    const a = Math.round(Number(String(b.ach).replace(/[%\s]/g, '')) * 10000);
+    if (!Number.isInteger(a) || a < 0 || a > 1010000) throw err(400, '達成率は 0〜101.0000% の範囲で入力してください');
+    v.ach = a;
+  }
+  if (has(b.dx) || has(b.dxMax ?? b.dx_max)) {
+    const dx = int(b.dx), mx = int(b.dxMax ?? b.dx_max);
+    if (!Number.isInteger(mx) || mx <= 0 || mx % 3 !== 0 || mx > 30000) throw err(400, 'でらっくスコアの最大値（MAX）を正しく入力してください（3の倍数）');
+    if (!Number.isInteger(dx) || dx < 0 || dx > mx) throw err(400, 'でらっくスコアは 0〜最大値 の範囲で入力してください');
+    v.dx = dx; v.dx_max = mx;
+  }
+  if (metric === 'dx' && v.dx === null) throw err(400, 'でらっくスコア（例 2,345 / 2,502）を入力してください');
+  if (metric === 'ach' && v.ach === null) throw err(400, '達成率を入力してください');
+  return v;
+}
+
+async function submitResult(req, env, user, ctx) {
+  const { b, c, x } = await oneMatch(req, env, user, 'play', '今はリザルトを提出できる期間ではありません');
+  const isA = x.m.a === c.e.id;
+  const finals = finalsOf(x.m, isA ? x.mine : x.theirs, isA ? x.theirs : x.mine, c.s.format);
+  const slot = Number(b.slot);
+  if (!Number.isInteger(slot) || slot < 0 || slot >= finals.length || !finals[slot]) throw err(400, 'どの対戦曲のリザルトかを選んでください');
+  const metric = METRIC[x.m.div] || 'ach';
+  const v = readValues(b, metric);
+  const image = String(b.image || '');
+  if (!/^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/=]+$/.test(image)) throw err(400, 'リザルト画像を選んでください');
+  if (image.length > 1500000) throw err(413, '画像が大きすぎます。もう一度選び直してください');
+  const ver = randomHex(4);
+  await env.DB.prepare("INSERT INTO results (match_id, entry_id, slot, song_key, dx, dx_max, ach, image, status, reason, submitted_at, reviewed_at, reviewer, ver) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending', '', datetime('now'), NULL, '', ?) ON CONFLICT(match_id, entry_id, slot) DO UPDATE SET song_key=excluded.song_key, dx=excluded.dx, dx_max=excluded.dx_max, ach=excluded.ach, image=excluded.image, status='pending', reason='', submitted_at=excluded.submitted_at, reviewed_at=NULL, reviewer='', ver=excluded.ver")
+    .bind(x.m.id, c.e.id, slot, finals[slot], v.dx, v.dx_max, v.ach, image, ver).run();
+  const job = notifyDiscord(env, { m: x.m, no: x.no, player: c.e.entry_name, slot, key: finals[slot], ver, image, entryId: c.e.id, ...v })
+    .catch((e) => console.error('Discord への通知に失敗しました', e));
+  if (ctx?.waitUntil) ctx.waitUntil(job); else await job;
+  return json({ ok: true });
+}
+
+// ---------- Discord：提出の通知と、ボタンでの承認・却下 ----------
+const fmtAch = (a) => (a / 10000).toFixed(4) + '%';
+const fmtNum = (n) => Number(n).toLocaleString('en-US');
+function valueText(r) {
+  const out = [];
+  if (r.dx !== null && r.dx !== undefined) out.push(`でらっくスコア ${fmtNum(r.dx)} / ${fmtNum(r.dx_max)}（失点 ${fmtNum(r.dx_max - r.dx)}）`);
+  if (r.ach !== null && r.ach !== undefined) out.push(`達成率 ${fmtAch(r.ach)}`);
+  return out.join('\n') || '（値なし）';
+}
+function songText(key, consts) {
+  const [name, kind, diff] = String(key).split('|');
+  const c = consts?.[key];
+  return `${name}（${diff} ${kind}${c !== undefined ? ' ' + c.toFixed(1) : ''}）`;
+}
+async function notifyDiscord(env, r) {
+  if (!env.DISCORD_BOT_TOKEN || !env.DISCORD_CHANNEL_ID) return;
+  const consts = await loadConsts(env).catch(() => null);
+  const div = DIVISIONS.find((d) => d.id === r.m.div)?.name || '';
+  const id = `${r.m.id}|${r.entryId}|${r.slot}|${r.ver}`;
+  const mime = r.image.slice(5, r.image.indexOf(';'));
+  const ext = mime.split('/')[1] === 'jpeg' ? 'jpg' : mime.split('/')[1];
+  const file = `result.${ext}`;
+  const payload = {
+    embeds: [{
+      title: `リザルト提出：${div} MATCH ${String(r.no).padStart(2, '0')}`,
+      color: 0xF2B33D,
+      fields: [
+        { name: 'プレイヤー', value: r.player, inline: true },
+        { name: '対戦曲', value: `${r.slot + 1}曲目：${songText(r.key, consts)}`, inline: true },
+        { name: '読み取り・入力された値', value: valueText(r) },
+      ],
+      image: { url: `attachment://${file}` },
+      footer: { text: '画像と値が合っていれば「承認」を押してください' },
+    }],
+    components: [{ type: 1, components: [
+      { type: 2, style: 3, label: '承認', custom_id: `ok|${id}` },
+      { type: 2, style: 4, label: '却下', custom_id: `ng|${id}` },
+    ] }],
+    attachments: [{ id: 0, filename: file }],
+  };
+  const bin = Uint8Array.from(atob(r.image.slice(r.image.indexOf(',') + 1)), (ch) => ch.charCodeAt(0));
+  const form = new FormData();
+  form.append('payload_json', JSON.stringify(payload));
+  form.append('files[0]', new Blob([bin], { type: mime }), file);
+  const res = await fetch(`https://discord.com/api/v10/channels/${env.DISCORD_CHANNEL_ID}/messages`, {
+    method: 'POST', headers: { Authorization: `Bot ${env.DISCORD_BOT_TOKEN}` }, body: form,
+  });
+  if (!res.ok) throw new Error(`Discord ${res.status} ${await res.text()}`);
+}
+
+async function verifyDiscord(env, req, raw) {
+  const sig = req.headers.get('X-Signature-Ed25519') || '';
+  const ts = req.headers.get('X-Signature-Timestamp') || '';
+  if (!env.DISCORD_PUBLIC_KEY || !/^[0-9a-f]{128}$/i.test(sig) || !ts) return false;
+  const data = new TextEncoder().encode(ts + raw);
+  for (const alg of [{ name: 'Ed25519' }, { name: 'NODE-ED25519', namedCurve: 'NODE-ED25519' }]) {
+    try {
+      const key = await crypto.subtle.importKey('raw', hexToBytes(env.DISCORD_PUBLIC_KEY), alg, false, ['verify']);
+      return await crypto.subtle.verify(alg.name === 'Ed25519' ? 'Ed25519' : alg, key, hexToBytes(sig), data);
+    } catch { /* 次の書き方で試す */ }
+  }
+  return false;
+}
+
+async function discordInteraction(req, env) {
+  const raw = await req.text();
+  if (!(await verifyDiscord(env, req, raw))) return new Response('invalid request signature', { status: 401 });
+  const it = JSON.parse(raw);
+  if (it.type === 1) return json({ type: 1 }); // 接続確認（PING）
+  const say = (content) => json({ type: 4, data: { content, flags: 64 } }); // 押した人にだけ見える返事
+  if (env.DISCORD_APPROVER_ROLE && !(it.member?.roles || []).includes(env.DISCORD_APPROVER_ROLE)) return say('承認・却下できるのは運営のロールを持つ人だけです');
+  const [act, mid, eid, slot, ver] = String(it.data?.custom_id || '').split('|');
+  if (it.type === 3 && act === 'ok') return reviewFromDiscord(env, it, mid, +eid, +slot, ver, 'approved', '');
+  if (it.type === 3 && act === 'ng') {
+    // 却下の理由を聞く小さな入力欄を開く
+    return json({ type: 9, data: {
+      custom_id: `ngr|${mid}|${eid}|${slot}|${ver}`, title: '却下の理由',
+      components: [{ type: 1, components: [{ type: 4, custom_id: 'reason', style: 2, label: '理由（参加者のページに表示。空欄でも可）', required: false, max_length: 200 }] }],
+    } });
+  }
+  if (it.type === 5 && act === 'ngr') {
+    const reason = String(it.data.components?.[0]?.components?.[0]?.value || '').trim();
+    return reviewFromDiscord(env, it, mid, +eid, +slot, ver, 'rejected', reason);
+  }
+  return say('この操作には対応していません');
+}
+
+async function reviewFromDiscord(env, it, mid, eid, slot, ver, status, reason) {
+  const say = (content) => json({ type: 4, data: { content, flags: 64 } });
+  const r = await env.DB.prepare('SELECT ver, status FROM results WHERE match_id=? AND entry_id=? AND slot=?').bind(mid, eid, slot).first();
+  if (!r) return say('この提出は見つかりませんでした（削除されたか、組み合わせが作り直された可能性があります）');
+  if (r.ver !== ver) return say('このリザルトは、あとから出し直されています。新しい方のメッセージで承認・却下してください');
+  const who = it.member?.nick || it.member?.user?.global_name || it.member?.user?.username || it.user?.username || '不明';
+  await env.DB.prepare("UPDATE results SET status=?, reason=?, reviewed_at=datetime('now'), reviewer=? WHERE match_id=? AND entry_id=? AND slot=?")
+    .bind(status, reason, `Discord：${who}`, mid, eid, slot).run();
+  const e = it.message?.embeds?.[0] || {};
+  const ok = status === 'approved';
+  const embed = {
+    title: e.title, fields: e.fields, color: ok ? 0x2E9E5B : 0xE0434B,
+    ...(e.image?.url ? { image: { url: e.image.url } } : {}),
+    footer: { text: `${ok ? '承認' : '却下'}：${who}${reason ? `（理由：${reason}）` : ''}` },
+  };
+  return json({ type: 7, data: { embeds: [embed], components: [] } });
+}
+
 // 譜面定数表（10分ごとに読み直す）
 let constsCache = null;
 async function loadConsts(env) {
@@ -440,13 +625,15 @@ async function admin(req, env, sub, m) {
     await env.DB.batch([
       env.DB.prepare('DELETE FROM entries WHERE id=?').bind(+em[1]),
       env.DB.prepare('DELETE FROM picks WHERE entry_id=?').bind(+em[1]),
+      env.DB.prepare('DELETE FROM results WHERE entry_id=?').bind(+em[1]),
     ]);
     return json({ ok: true });
   }
   if (sub === 'state' && m === 'GET') {
     const { results } = await env.DB.prepare('SELECT * FROM picks').all();
     const picks = results.map((r) => ({ ...r, songs: JSON.parse(r.songs) }));
-    return json({ settings: await getSettings(env), matches: (await getKV(env, 'matches')) ?? [], picks });
+    const rs = (await env.DB.prepare('SELECT match_id, entry_id, slot, song_key, dx, dx_max, ach, status, reason, submitted_at, reviewed_at, reviewer, length(image) AS img FROM results').all()).results;
+    return json({ settings: await getSettings(env), matches: (await getKV(env, 'matches')) ?? [], picks, results: rs });
   }
   if (sub === 'state' && m === 'PUT') {
     const b = await body(req);
@@ -479,6 +666,45 @@ async function admin(req, env, sub, m) {
       if (Number.isInteger(it.ban)) f.ban = it.ban;
       if (Number.isInteger(it.pick)) f.pick = it.pick;
       if (Object.keys(f).length && it.match_id && Number.isInteger(it.entry_id)) await writePick(env, String(it.match_id), it.entry_id, f);
+    }
+    return json({ ok: true });
+  }
+  if (sub === 'result-image' && m === 'GET') {
+    const q = new URL(req.url).searchParams;
+    const r = await env.DB.prepare('SELECT image FROM results WHERE match_id=? AND entry_id=? AND slot=?')
+      .bind(q.get('match_id') || '', Number(q.get('entry_id')), Number(q.get('slot'))).first();
+    if (!r) throw err(404, 'リザルトが見つかりません');
+    return json({ image: r.image || '' });
+  }
+  if (sub === 'results' && m === 'PUT') {
+    const items = (await body(req)).items;
+    if (!Array.isArray(items)) throw err(400, 'items がありません');
+    const ms = (await getKV(env, 'matches')) ?? [];
+    for (const it of items) {
+      const mid = String(it.match_id || ''), eid = Number(it.entry_id), slot = Number(it.slot);
+      if (!mid || !Number.isInteger(eid) || !Number.isInteger(slot) || slot < 0 || slot > 3) throw err(400, 'リザルトの指定が正しくありません');
+      if (it.remove) { await env.DB.prepare('DELETE FROM results WHERE match_id=? AND entry_id=? AND slot=?').bind(mid, eid, slot).run(); continue; }
+      const f = {};
+      if (it.status !== undefined) {
+        if (!['pending', 'approved', 'rejected'].includes(it.status)) throw err(400, '状態の指定が正しくありません');
+        f.status = it.status;
+      }
+      if (it.reason !== undefined) f.reason = String(it.reason).slice(0, 200);
+      if (['dx', 'dx_max', 'ach'].some((k) => it[k] !== undefined)) {
+        const div = ms.find((x) => x.id === mid)?.div;
+        const v = readValues({ dx: it.dx, dxMax: it.dx_max, ach: it.ach }, null);
+        if (div && METRIC[div] === 'dx' && v.dx === null) throw err(400, 'らいむ部門はでらっくスコアが必要です');
+        if (div && METRIC[div] === 'ach' && v.ach === null) throw err(400, 'れもん部門は達成率が必要です');
+        Object.assign(f, v);
+      }
+      if (!Object.keys(f).length) continue;
+      await env.DB.prepare("INSERT INTO results (match_id, entry_id, slot, song_key, image, status, ver) VALUES (?, ?, ?, ?, '', 'pending', ?) ON CONFLICT DO NOTHING")
+        .bind(mid, eid, slot, String(it.song_key || ''), randomHex(4)).run();
+      const cols = Object.keys(f);
+      // 承認・却下したときだけ、確認した人として「運営ページ」を記録する
+      const reviewed = f.status === 'approved' || f.status === 'rejected' ? ", reviewed_at=datetime('now'), reviewer='運営ページ'" : '';
+      await env.DB.prepare(`UPDATE results SET ${cols.map((k) => `${k}=?`).join(', ')}${reviewed} WHERE match_id=? AND entry_id=? AND slot=?`)
+        .bind(...Object.values(f), mid, eid, slot).run();
     }
     return json({ ok: true });
   }
