@@ -80,24 +80,30 @@ function finalSongs({ format, aKey, bKey, aName, bName, kadai, kadai2 }) {
 const fmtConst = (c) => (Math.round(c * 10) / 10).toFixed(1);
 
 // ---------- リザルトと勝敗 ----------
-// らいむ部門：でらっくスコアの失点（MAX との差）の3曲合計が少ない方の勝ち
+// らいむ部門：失点の3曲合計が少ない方の勝ち
+//   失点 ＝（でらっくスコアの MAX − でらっくスコア）＋ CRITICAL PERFECT 以外で取った BREAK の数 × 2
 // れもん部門：達成率の3曲合計が高い方の勝ち
 const METRIC = { lime: 'dx', lemon: 'ach' };
 const fmtAch = (a) => (a / 10000).toFixed(4) + '%';
 const fmtNum = (n) => Number(n).toLocaleString('en-US');
-const resultOK = (metric, r) => !!r && r.status === 'approved' && (metric === 'dx' ? r.dx != null && r.dx_max != null : r.ach != null);
-// rows：[{ a: リザルト|null, b: リザルト|null }]（対戦曲ごと）
-function resultScore(metric, rows) {
+const lossOf = (r) => r.dx_max - r.dx + 2 * (r.brk || 0);
+const fmtLoss = (n) => (n ? '-' + fmtNum(n) : '0');
+const resultOK = (metric, r) => !!r && r.status === 'approved' && (metric === 'dx' ? r.dx != null && r.dx_max != null && r.brk != null : r.ach != null);
+// rows：[{ a: リザルト|null, b: リザルト|null }]（対戦曲ごと）。override：運営が手で決めた勝敗（'a'・'b'・'draw'・'none'）
+function resultScore(metric, rows, override = '') {
   const side = (k) => ({
-    total: rows.reduce((t, x) => t + (resultOK(metric, x[k]) ? (metric === 'dx' ? x[k].dx_max - x[k].dx : x[k].ach) : 0), 0),
+    total: rows.reduce((t, x) => t + (resultOK(metric, x[k]) ? (metric === 'dx' ? lossOf(x[k]) : x[k].ach) : 0), 0),
     done: rows.length > 0 && rows.every((x) => resultOK(metric, x[k])),
+    missing: rows.filter((x) => !resultOK(metric, x[k])).length,
   });
   const a = side('a'), b = side('b');
   let winner = null;
   if (a.done && b.done) winner = a.total === b.total ? 'draw' : (metric === 'dx' ? a.total < b.total : a.total > b.total) ? 'a' : 'b';
-  return { metric, a, b, winner };
+  // 未提出があるときは自動では決めない。運営が決めた場合はそれを使う（'none' は「勝敗なし」）
+  if (override) winner = override === 'none' ? null : override;
+  return { metric, a, b, winner, manual: !!override };
 }
-const scoreText = (metric, total) => (metric === 'dx' ? `失点 ${fmtNum(total)}` : fmtAch(total));
+const scoreText = (metric, total) => (metric === 'dx' ? fmtLoss(total) : fmtAch(total));
 
 // 全譜面の一覧を読み込む（{ key, name, kind, diff, c, lv, img }）
 let chartsPromise = null;

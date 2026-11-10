@@ -1,7 +1,7 @@
 // デモモード：本物の worker.js を、ブラウザの中のデータベースにつないで動かす
 // （サーバーには何も送らない。データはこのブラウザの localStorage にだけ保存）
-import worker from '../worker/worker.js?v=demo8';
-import { makeDB, emptyData } from './memdb.js?v=demo8';
+import worker from '../worker/worker.js?v=demo9';
+import { makeDB, emptyData } from './memdb.js?v=demo9';
 
 const STORE = 'mogucupdx-demo-db';
 const ADMIN_KEY = 'demo';
@@ -25,7 +25,7 @@ const SEED = [
 ];
 
 // デモの中身の版。古い版のまま残っている・準備の途中で失敗したデータは作り直す
-const DEMO_VERSION = 7;
+const DEMO_VERSION = 8;
 let data;
 try { data = JSON.parse(localStorage.getItem(STORE)); } catch { data = null; }
 const fresh = !data || data.demoVersion !== DEMO_VERSION || !data.entries?.length;
@@ -145,7 +145,7 @@ async function autoFill() {
           if (!key || st.results?.some((r) => r.match_id === m.id && r.entry_id === self && r.slot === slot)) return;
           const max = (700 + (hash(key) % 400)) * 3; // 譜面ごとに決まった MAX（2,100〜3,297）
           res.push(m.div === 'lime'
-            ? { match_id: m.id, entry_id: self, slot, song_key: key, dx: max - 20 - Math.floor(Math.random() * 200), dx_max: max, status: 'pending' }
+            ? { match_id: m.id, entry_id: self, slot, song_key: key, dx: max - 20 - Math.floor(Math.random() * 200), dx_max: max, brk: Math.floor(Math.random() * 6), status: 'pending' }
             : { match_id: m.id, entry_id: self, slot, song_key: key, ach: (100.3 + Math.random() * 0.7).toFixed(4), status: 'pending' });
         });
       }

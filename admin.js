@@ -70,7 +70,7 @@ function buildMatches(ms, picks) {
   return (ms || []).map((m) => {
     const pa = row(m.id, m.a), pb = row(m.id, m.b);
     return {
-      id: m.id || newId(), div: m.div || DIVISIONS[0].id, a: m.a ?? null, b: m.b ?? null, cap: m.cap ?? 14, kadai: m.kadai || '', kadai2: m.kadai2 || '', lv14: !!m.lv14,
+      id: m.id || newId(), div: m.div || DIVISIONS[0].id, a: m.a ?? null, b: m.b ?? null, cap: m.cap ?? 14, kadai: m.kadai || '', kadai2: m.kadai2 || '', lv14: !!m.lv14, winner: m.winner || '',
       aSongs: [0, 1, 2].map((i) => pa.songs[i] || ''), bSongs: [0, 1, 2].map((i) => pb.songs[i] || ''),
       aBan: pb.ban, bBan: pa.ban, aPick: pa.pick, bPick: pb.pick, edited: false,
     };
@@ -81,7 +81,7 @@ $('#saveState').onclick = async () => {
   readSettingsForm();
   const btn = $('#saveState'); btn.disabled = true;
   try {
-    const plain = matches.map(({ id, div, a, b, cap, kadai, kadai2, lv14 }) => ({ id, div, a, b, cap, kadai, kadai2, lv14 }));
+    const plain = matches.map(({ id, div, a, b, cap, kadai, kadai2, lv14, winner }) => ({ id, div, a, b, cap, kadai, kadai2, lv14, winner }));
     // 運営が直した試合の選曲だけ送る（参加者がその後に提出した内容を上書きしないため）
     const items = [];
     matches.filter((m) => m.edited).forEach((m) => {
@@ -295,7 +295,7 @@ const defOf = (div) => settings.divDefaults?.[div] || { cap: 14, kadai: '', kada
 function renderSettingsForm() {
   const s = settings;
   $('#sTitle').value = s.title; $('#sOpen').checked = !!s.entryOpen;
-  $('#sDeadline').value = s.entryDeadline || ''; $('#sNotice').value = s.notice || '';
+  $('#sDeadline').value = s.entryDeadline || ''; $('#sResultDeadline').value = s.resultDeadline || ''; $('#sNotice').value = s.notice || '';
   $('#sPhase').innerHTML = Object.entries(PHASE_LABEL).map(([k, v]) => `<option value="${k}"${k === s.phase ? ' selected' : ''}>${v}</option>`).join('');
   $('#sPhaseNote').value = s.phaseNote || '';
   $('#nPair').value = s.notes.pair; $('#nReveal').value = s.notes.reveal; $('#nBan').value = s.notes.ban || ''; $('#nFinal').value = s.notes.final; $('#nResult').value = s.notes.result || '';
@@ -319,7 +319,7 @@ function readSettingsForm() {
   if (!settings) return;
   Object.assign(settings, {
     title: $('#sTitle').value.trim(), round: '', entryOpen: $('#sOpen').checked,
-    entryDeadline: $('#sDeadline').value, notice: $('#sNotice').value.trim(),
+    entryDeadline: $('#sDeadline').value, resultDeadline: $('#sResultDeadline').value, notice: $('#sNotice').value.trim(),
     phase: $('#sPhase').value || settings.phase, phaseNote: $('#sPhaseNote').value.trim(),
     format: $('#sFormat').value || 'main',
   });
@@ -523,7 +523,7 @@ function resultView(m) {
   const metric = METRIC[m.div] || 'ach';
   const ch = (k) => (k && charts?.byKey.get(k)) || null;
   const rows = matchFinals(m).map((f, slot) => ({ s: ch(f.key), label: f.label, a: resultOf(m.id, m.a, slot, true), b: resultOf(m.id, m.b, slot, true) }));
-  return { metric, rows, score: resultScore(metric, rows) };
+  return { metric, rows, score: resultScore(metric, rows, m.winner || '') };
 }
 function matchFinals(m) {
   return finalSongs({
@@ -665,9 +665,14 @@ function renderResults() {
     const box = document.createElement('div'); box.className = 'match';
     const no = divMatches(m.div).indexOf(m) + 1;
     const sc = view.score;
-    const tot = (side) => (sc[side].done ? scoreText(metric, sc[side].total) : '集計中');
-    const win = sc.winner === 'a' ? nameOf(m.a, 'A') + ' の勝ち' : sc.winner === 'b' ? nameOf(m.b, 'B') + ' の勝ち' : sc.winner === 'draw' ? '引き分け' : '未確定';
-    box.innerHTML = `<header><span>${divPill(m.div)} <b>MATCH ${String(no).padStart(2, '0')}</b>　${esc(nameOf(m.a, 'A'))}（${tot('a')}） vs ${esc(nameOf(m.b, 'B'))}（${tot('b')}）</span><span class="note">${metric === 'dx' ? 'でらっくスコアの失点の合計が少ない方の勝ち' : '達成率の合計が高い方の勝ち'}　<b>${win}</b></span></header>`;
+    const tot = (side) => (sc[side].done ? scoreText(metric, sc[side].total) : `未提出・未承認 ${sc[side].missing}曲`);
+    const win = sc.winner === 'a' ? nameOf(m.a, 'A') + ' の勝ち' : sc.winner === 'b' ? nameOf(m.b, 'B') + ' の勝ち' : sc.winner === 'draw' ? '引き分け' : m.winner === 'none' ? '勝敗なし' : '未確定';
+    box.innerHTML = `<header><span>${divPill(m.div)} <b>MATCH ${String(no).padStart(2, '0')}</b>　${esc(nameOf(m.a, 'A'))}（${tot('a')}） vs ${esc(nameOf(m.b, 'B'))}（${tot('b')}）</span><span class="note">${metric === 'dx' ? '失点（MAX との差＋CP以外のBREAK×2）の合計が少ない方の勝ち' : '達成率の合計が高い方の勝ち'}　<b>${win}</b>${sc.manual ? '（運営判定）' : ''}</span></header>`;
+    // 勝敗を手で決める（未提出があって自動で決まらないときなど）。保存は「設定と組み合わせを保存」
+    const wsel = document.createElement('label'); wsel.className = 'rwinner';
+    wsel.innerHTML = `勝敗の決め方 <select>${[['', '自動（承認済みの合計で決める）'], ['a', `${esc(nameOf(m.a, 'A'))} の勝ち`], ['b', `${esc(nameOf(m.b, 'B'))} の勝ち`], ['draw', '引き分け'], ['none', '勝敗なし（未提出など）']].map(([v, t]) => `<option value="${v}"${(m.winner || '') === v ? ' selected' : ''}>${t}</option>`).join('')}</select>`;
+    wsel.querySelector('select').onchange = (e) => { m.winner = e.target.value; markDirty(); renderResults(); if (tab === 'images') renderImage(); setMsg('勝敗の決め方を変えました。「設定と組み合わせを保存」を押すと反映されます', 'ok'); };
+    box.append(wsel);
     const tbl = document.createElement('div'); tbl.className = 'rgrid';
     fs.forEach((f, slot) => {
       const c = charts?.byKey.get(f.key);
@@ -688,15 +693,16 @@ function resultCell(m, eid, slot, f, metric) {
   cell.innerHTML = `<div class="rhead"><b>${esc(nameOf(eid, ''))}</b> <span class="rstatus ${st[1]}">${st[0]}</span>${r?.reviewer ? ` <span class="note">${esc(r.reviewer)}</span>` : ''}</div>`;
   const inputs = document.createElement('div'); inputs.className = 'rinputs';
   const inp = (ph, v, w) => { const i = document.createElement('input'); i.type = 'text'; i.inputMode = 'decimal'; i.placeholder = ph; i.value = v ?? ''; i.style.width = w; return i; };
+  const iBrk = inp('例 3', r?.brk, '5em');
   const iDx = inp('DXスコア', r?.dx, '7em'), iMax = inp('MAX', r?.dx_max, '6em'), iAch = inp('達成率', r?.ach != null ? (r.ach / 10000).toFixed(4) : '', '8em');
-  if (metric === 'dx') inputs.append(iDx, document.createTextNode(' / '), iMax); else inputs.append(iAch, document.createTextNode(' %'));
-  if (metric === 'dx' && r?.dx != null) inputs.append(Object.assign(document.createElement('span'), { className: 'note', textContent: `　失点 ${fmtNum(r.dx_max - r.dx)}` }));
+  if (metric === 'dx') inputs.append(iDx, document.createTextNode(' / '), iMax, document.createTextNode('　CP以外のBREAK '), iBrk); else inputs.append(iAch, document.createTextNode(' %'));
+  if (metric === 'dx' && r?.dx != null) inputs.append(Object.assign(document.createElement('span'), { className: 'note', textContent: `　失点 ${fmtLoss(lossOf(r))}` }));
   cell.append(inputs);
   if (r?.status === 'rejected' && r.reason) cell.append(Object.assign(document.createElement('div'), { className: 'warn', textContent: '理由：' + r.reason }));
   const reason = inp('却下の理由（任意）', '', '100%'); reason.inputMode = 'text'; reason.hidden = true;
   const btns = document.createElement('div'); btns.className = 'btns';
   const mk = (t, cls, fn) => { const b = document.createElement('button'); b.type = 'button'; b.textContent = t; if (cls) b.className = cls; b.onclick = fn; btns.append(b); return b; };
-  const vals = () => (metric === 'dx' ? { dx: iDx.value, dx_max: iMax.value } : { ach: iAch.value });
+  const vals = () => (metric === 'dx' ? { dx: iDx.value, dx_max: iMax.value, brk: iBrk.value } : { ach: iAch.value });
   const send = async (item, done) => {
     try {
       await api('api/admin/results', { method: 'PUT', key: KEY, body: { items: [{ match_id: m.id, entry_id: eid, slot, song_key: f.key, ...item }] } });

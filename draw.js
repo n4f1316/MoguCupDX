@@ -8,6 +8,7 @@ var DrawKit = window.DrawKit || (() => {
   const fmtConst = (c) => (Math.round(c * 10) / 10).toFixed(1);
   const fmtAch = (a) => (a / 10000).toFixed(4) + '%';
   const fmtNum = (n) => Number(n).toLocaleString('en-US');
+  const fmtLoss = (n) => (n ? '-' + fmtNum(n) : '0');
   const C = { bg1: '#f6f9fd', bg2: '#e4eef8', hole: 'rgba(42,111,184,.06)', card: '#ffffff', card2: '#eef5fc', fg: '#1f2d3d', mute: '#5b6f86', accent: '#2a6fb8', ban: '#d93a49', gold: '#f0b429', goldText: '#9a6400', jk: '#dbe7f3', line: '#d6e2ee', onAccent: '#ffffff' };
   const FD = '"M PLUS Rounded 1c","Hiragino Maru Gothic ProN",sans-serif';
   const FB = '"Zen Kaku Gothic New","Hiragino Sans","Noto Sans JP",sans-serif';
@@ -278,7 +279,7 @@ var DrawKit = window.DrawKit || (() => {
       rr(x, 228, 640, 176, 18); ctx.fillStyle = win ? '#fff8e6' : C.card; ctx.fill();
       ctx.lineWidth = win ? 4 : 1.5; ctx.strokeStyle = win ? C.gold : C.line; ctx.stroke();
       fit(side === 'a' ? m.aName : m.bName, x + 28, 286, 420, 40, 800, FD, 'left', C.fg);
-      const total = s1.done ? (dx ? `失点 ${fmtNum(s1.total)}` : fmtAch(s1.total)) : '集計中';
+      const total = s1.done ? (dx ? fmtLoss(s1.total) : fmtAch(s1.total)) : s1.missing ? `未提出 ${s1.missing}曲` : '集計中';
       fit(total, x + 28, 370, 600, 58, 800, FM, 'left', s1.done ? C.fg : C.mute);
       const tag = sc.winner ? (draw ? 'DRAW' : win ? 'WIN' : 'LOSE') : '';
       if (tag) {
@@ -290,9 +291,18 @@ var DrawKit = window.DrawKit || (() => {
     };
     panel('a', 80); panel('b', 880);
     fit('VS', W / 2, 336, 120, 52, 800, FD, 'center', C.accent);
-    fit(dx ? 'でらっくスコアの失点（MAX との差）の合計が少ない方の勝ち' : '達成率の合計が高い方の勝ち', W / 2, top, W - 160, 22, 700, FB, 'center', C.mute);
+    if (sc.manual) fit('運営判定', W / 2, 380, 120, 20, 700, FB, 'center', C.mute);
+    fit(dx ? '失点（MAX − でらっくスコア ＋ CRITICAL PERFECT 以外の BREAK × 2）の合計が少ない方の勝ち' : '達成率の合計が高い方の勝ち', W / 2, top, W - 160, 22, 700, FB, 'center', C.mute);
     // 対戦曲ごと
-    const val = (r) => (!r ? null : dx ? (r.dx != null ? { big: `${fmtNum(r.dx)} / ${fmtNum(r.dx_max)}`, small: `失点 ${fmtNum(r.dx_max - r.dx)}`, v: r.dx_max - r.dx } : null) : (r.ach != null ? { big: fmtAch(r.ach), small: '', v: r.ach } : null));
+    const val = (r) => {
+      if (!r) return null;
+      if (dx) {
+        if (r.dx == null) return null;
+        const loss = r.dx_max - r.dx + 2 * (r.brk || 0);
+        return { big: fmtLoss(loss), small: `DX ${fmtNum(r.dx)} / ${fmtNum(r.dx_max)}・CP以外のBREAK ${r.brk ?? "?"}`, v: loss };
+      }
+      return r.ach != null ? { big: fmtAch(r.ach), small: '', v: r.ach } : null;
+    };
     m.rows.forEach((row, k) => {
       const y = top + 56 + k * (rh + gap);
       songCard(row.s, 540, y, 520, rh, { img: row.s && imgs.get(row.s.key), empty: '未定' });

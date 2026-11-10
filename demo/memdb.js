@@ -79,19 +79,19 @@ export function makeDB(data, onWrite) {
     'DELETE FROM picks WHERE entry_id=?': ([e]) => { T.picks = T.picks.filter((p) => p.entry_id !== e); return { write: true }; },
 
     // リザルト
-    "INSERT INTO results (match_id, entry_id, slot, song_key, dx, dx_max, ach, image, status, reason, submitted_at, reviewed_at, reviewer, ver) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending', '', datetime('now'), NULL, '', ?) ON CONFLICT(match_id, entry_id, slot) DO UPDATE SET song_key=excluded.song_key, dx=excluded.dx, dx_max=excluded.dx_max, ach=excluded.ach, image=excluded.image, status='pending', reason='', submitted_at=excluded.submitted_at, reviewed_at=NULL, reviewer='', ver=excluded.ver": ([m, e, sl, k, dx, mx, ach, img, ver]) => {
+    "INSERT INTO results (match_id, entry_id, slot, song_key, dx, dx_max, brk, ach, image, status, reason, submitted_at, reviewed_at, reviewer, ver) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', '', datetime('now'), NULL, '', ?) ON CONFLICT(match_id, entry_id, slot) DO UPDATE SET song_key=excluded.song_key, dx=excluded.dx, dx_max=excluded.dx_max, brk=excluded.brk, ach=excluded.ach, image=excluded.image, status='pending', reason='', submitted_at=excluded.submitted_at, reviewed_at=NULL, reviewer='', ver=excluded.ver": ([m, e, sl, k, dx, mx, brk, ach, img, ver]) => {
       T.results = T.results.filter((x) => !rKey(m, e, sl)(x));
-      T.results.push({ match_id: m, entry_id: e, slot: sl, song_key: k, dx, dx_max: mx, ach, image: img, status: 'pending', reason: '', submitted_at: now(), reviewed_at: null, reviewer: '', ver });
+      T.results.push({ match_id: m, entry_id: e, slot: sl, song_key: k, dx, dx_max: mx, brk, ach, image: img, status: 'pending', reason: '', submitted_at: now(), reviewed_at: null, reviewer: '', ver });
       return { write: true };
     },
     "INSERT INTO results (match_id, entry_id, slot, song_key, image, status, ver) VALUES (?, ?, ?, ?, '', 'pending', ?) ON CONFLICT DO NOTHING": ([m, e, sl, k, ver]) => {
-      if (!T.results.some(rKey(m, e, sl))) T.results.push({ match_id: m, entry_id: e, slot: sl, song_key: k, dx: null, dx_max: null, ach: null, image: '', status: 'pending', reason: '', submitted_at: now(), reviewed_at: null, reviewer: '', ver });
+      if (!T.results.some(rKey(m, e, sl))) T.results.push({ match_id: m, entry_id: e, slot: sl, song_key: k, dx: null, dx_max: null, brk: null, ach: null, image: '', status: 'pending', reason: '', submitted_at: now(), reviewed_at: null, reviewer: '', ver });
       return { write: true };
     },
-    'SELECT slot, song_key, dx, dx_max, ach, status, reason, submitted_at FROM results WHERE match_id=? AND entry_id=?': ([m, e]) => ({
-      rows: T.results.filter((x) => x.match_id === m && x.entry_id === e).map(({ slot, song_key, dx, dx_max, ach, status, reason, submitted_at }) => ({ slot, song_key, dx, dx_max, ach, status, reason, submitted_at })),
+    'SELECT slot, song_key, dx, dx_max, brk, ach, status, reason, submitted_at FROM results WHERE match_id=? AND entry_id=?': ([m, e]) => ({
+      rows: T.results.filter((x) => x.match_id === m && x.entry_id === e).map(({ slot, song_key, dx, dx_max, brk, ach, status, reason, submitted_at }) => ({ slot, song_key, dx, dx_max, brk: brk ?? null, ach, status, reason, submitted_at })),
     }),
-    'SELECT match_id, entry_id, slot, song_key, dx, dx_max, ach, status, reason, submitted_at, reviewed_at, reviewer, length(image) AS img FROM results': () => ({
+    'SELECT match_id, entry_id, slot, song_key, dx, dx_max, brk, ach, status, reason, submitted_at, reviewed_at, reviewer, length(image) AS img FROM results': () => ({
       rows: T.results.map(({ image, ver, ...r }) => ({ ...r, img: (image || '').length })),
     }),
     'SELECT image FROM results WHERE match_id=? AND entry_id=? AND slot=?': ([m, e, sl]) => ({ rows: T.results.filter(rKey(m, e, sl)).map((x) => ({ image: x.image })) }),

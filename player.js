@@ -448,12 +448,12 @@ function resultRows(m, finals) {
     const slot = (m.finals || []).indexOf(f.key);
     return { s: f.s, label: f.label, a: bySlot(m.myResults, slot), b: bySlot(m.oppResults, slot) };
   });
-  return { metric, rows, score: resultScore(metric, rows) };
+  return { metric, rows, score: resultScore(metric, rows, m.winner || '') };
 }
 const STATUS = { pending: ['承認待ち', 'st-pending'], approved: ['承認済み', 'st-ok'], rejected: ['却下', 'st-ng'] };
 function valueLine(metric, r) {
   if (!r) return '';
-  if (metric === 'dx') return r.dx != null ? `でらっくスコア ${fmtNum(r.dx)} / ${fmtNum(r.dx_max)}（失点 ${fmtNum(r.dx_max - r.dx)}）` : '';
+  if (metric === 'dx') return r.dx != null ? `でらっくスコア ${fmtNum(r.dx)} / ${fmtNum(r.dx_max)}・CP以外のBREAK ${r.brk ?? '?'} → 失点 ${fmtLoss(lossOf(r))}` : '';
   return r.ach != null ? `達成率 ${fmtAch(r.ach)}` : '';
 }
 
@@ -461,9 +461,15 @@ function renderPlay(box, m) {
   const metric = m.metric || METRIC[m.div];
   box.append(el('h2', '', 'リザルトの提出'));
   box.append(el('p', 'note', metric === 'dx'
-    ? 'この部門は、でらっくスコアの失点（MAX との差）の3曲合計が少ない方の勝ちです。曲ごとにリザルト画像を選ぶと、でらっくスコアを読み取ります。値を確かめてから提出してください。'
+    ? 'この部門は、失点の3曲合計が少ない方の勝ちです。失点 ＝（でらっくスコアの MAX − でらっくスコア）＋ CRITICAL PERFECT 以外で取った BREAK の数 × 2。曲ごとにリザルト画像を選ぶと、でらっくスコアを読み取ります。BREAK の数は判定の内訳を見て入力し、値を確かめてから提出してください。'
     : 'この部門は、達成率の3曲合計が高い方の勝ちです。曲ごとにリザルト画像を選ぶと、達成率を読み取ります。値を確かめてから提出してください。'));
   box.append(el('p', 'note', 'でらっくす NET のプレイ履歴（詳細）のスクリーンショットが一番正確に読み取れます。ゲーム機の画面の写真でも提出できます。期間中は何度でも出し直せます（出し直すと承認待ちに戻ります）。'));
+  const dl = ME.settings.resultDeadline;
+  const closed = dl && Date.now() > Date.parse(dl + ':00+09:00');
+  const facts = el('dl', 'facts');
+  facts.innerHTML = `<dt>提出の締切</dt><dd>${dl ? esc(fmtDeadline(dl)) : '運営が締め切るまで'}${closed ? '　<b>（終了しました）</b>' : ''}</dd>`;
+  box.append(facts);
+  if (closed) box.append(el('p', 'warn', 'リザルトの提出期間は終了しました。提出されていない曲は「未提出」として扱われます。'));
   for (const f of myFinals(m)) {
     const r = (m.myResults || []).find((x) => x.slot === f.slot) || null;
     const card = el('div', 'rcard');
@@ -473,6 +479,7 @@ function renderPlay(box, m) {
     if (r) card.append(el('div', 'rval', valueLine(metric, r)));
     if (r?.status === 'rejected') card.append(el('p', 'warn', `却下の理由：${r.reason || '（理由なし）'}。もう一度提出してください。`));
     if (f.slot < 0 || !f.key) { card.append(el('p', 'note', '対戦曲が決まっていません。運営に連絡してください。')); box.append(card); continue; }
+    if (closed) { box.append(card); continue; }
     const open = el('button', r ? '' : 'primary', r ? '出し直す' : 'リザルトを提出');
     open.type = 'button';
     const form = el('div', 'rform'); form.hidden = true;
@@ -494,11 +501,14 @@ function buildResultForm(form, m, f, metric) {
   const [lDx, iDx] = num('でらっくスコア', '例 2345');
   const [lMax, iMax] = num('でらっくスコアの最大値（MAX）', '例 2502');
   const [lAch, iAch] = num('達成率（%）', '例 100.5432', 'decimal');
+  const [lBrk, iBrk] = num('CRITICAL PERFECT 以外の BREAK の数', '例 3');
   const row = el('div', 'row');
-  if (metric === 'dx') row.append(lDx, lMax); else row.append(lAch);
+  if (metric === 'dx') row.append(lDx, lMax, lBrk); else row.append(lAch);
+  const brkNote = el('p', 'note', 'BREAK の数は、判定の内訳の BREAK の行で、CRITICAL PERFECT 以外（PERFECT・GREAT・GOOD・MISS）を足した数です。1つにつき失点が2増えます。');
+  if (metric !== 'dx') brkNote.hidden = true;
   const send = el('button', 'primary', 'この内容で提出'); send.type = 'button'; send.disabled = true;
   const btns = el('div', 'btns'); btns.append(send);
-  form.append(pick, prev, ocrNote, row, btns);
+  form.append(pick, prev, ocrNote, row, brkNote, btns);
   let image = '';
   file.onchange = async () => {
     const fl = file.files?.[0]; if (!fl) return;
@@ -512,7 +522,9 @@ function buildResultForm(form, m, f, metric) {
       if (metric === 'dx' && v.dx != null) { iDx.value = v.dx; iMax.value = v.dxMax; }
       if (metric === 'ach' && v.ach != null) iAch.value = v.ach;
       const got = metric === 'dx' ? v.dx != null : v.ach != null;
-      ocrNote.textContent = got ? '読み取った値を入れました。画像と見比べて、違っていたら直してから提出してください。' : '値を読み取れませんでした。画像を見ながら入力してください。';
+      ocrNote.textContent = got
+        ? `読み取った値を入れました。画像と見比べて、違っていたら直してから提出してください。${metric === 'dx' ? 'BREAK の数は自分で入力してください。' : ''}`
+        : '値を読み取れませんでした。画像を見ながら入力してください。';
     } catch (e) {
       ocrNote.textContent = image ? '値を読み取れませんでした。画像を見ながら入力してください。' : e.message;
     }
@@ -521,7 +533,7 @@ function buildResultForm(form, m, f, metric) {
     send.disabled = true;
     try {
       const body = { matchId: m.id, slot: f.slot, image };
-      if (metric === 'dx') Object.assign(body, { dx: iDx.value, dxMax: iMax.value }); else body.ach = iAch.value;
+      if (metric === 'dx') Object.assign(body, { dx: iDx.value, dxMax: iMax.value, brk: iBrk.value }); else body.ach = iAch.value;
       await api('api/me/result', { method: 'POST', key: token, body });
       setMsg('リザルトを提出しました。運営の承認をお待ちください', 'ok');
       await refresh();
@@ -597,16 +609,19 @@ function renderResult(box, m) {
   const fs = myFinals(m).map((f) => ({ ...f, s: charts?.byKey.get(f.key) || null }));
   const { rows, score } = resultRows(m, fs);
   box.append(el('h2', '', '結果'));
-  const res = score.winner === 'a' ? 'あなたの勝ちです' : score.winner === 'b' ? 'あなたの負けです' : score.winner === 'draw' ? '引き分けです' : '集計中です（承認されていないリザルトがあります）';
+  const res = score.winner === 'a' ? 'あなたの勝ちです' : score.winner === 'b' ? 'あなたの負けです' : score.winner === 'draw' ? '引き分けです'
+    : m.winner === 'none' || score.a.missing || score.b.missing ? '未提出の曲があるため、勝敗はつきません' : '集計中です';
   box.append(el('p', 'rwin', res));
+  if (score.manual && m.winner !== 'none') box.append(el('p', 'note', 'この試合の勝敗は運営が判定しました。'));
   const facts = el('dl', 'facts');
-  facts.innerHTML = `<dt>あなた</dt><dd>${score.a.done ? scoreText(metric, score.a.total) : '集計中'}</dd><dt>${esc(m.opponent?.entryName || '相手')}</dt><dd>${score.b.done ? scoreText(metric, score.b.total) : '集計中'}</dd>`;
+  const tot = (x) => (x.done ? scoreText(metric, x.total) : `未提出 ${x.missing}曲`);
+  facts.innerHTML = `<dt>あなた</dt><dd>${tot(score.a)}</dd><dt>${esc(m.opponent?.entryName || '相手')}</dt><dd>${tot(score.b)}</dd>`;
   box.append(facts);
   rows.forEach((r, i) => {
     box.append(el('div', 'slotno', fs[i].label));
     box.append(songEl(fs[i].key));
     const v = el('div', 'rval');
-    v.append(el('div', '', `あなた：${valueLine(metric, r.a) || '—'}`), el('div', '', `${m.opponent?.entryName || '相手'}：${valueLine(metric, r.b) || '—'}`));
+    v.append(el('div', '', `あなた：${valueLine(metric, r.a) || '未提出'}`), el('div', '', `${m.opponent?.entryName || '相手'}：${valueLine(metric, r.b) || '未提出'}`));
     box.append(v);
   });
 }

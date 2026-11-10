@@ -6,7 +6,7 @@
 <meta name="robots" content="noindex">
 <title>もぐらたたきカップ 運営</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=M+PLUS+Rounded+1c:wght@500;800&family=Zen+Kaku+Gothic+New:wght@400;700&family=JetBrains+Mono:wght@500&display=swap">
-<link rel="stylesheet" href="common.css?v=20261110a">
+<link rel="stylesheet" href="common.css?v=20261110b">
 <style>
 main{max-width:1280px;margin:0 auto;display:grid;gap:16px}
 .top{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:8px 16px}
@@ -52,6 +52,8 @@ td input{padding:3px 6px;font-size:14px}
 .canvasbox{border:1px solid var(--line);border-radius:8px;overflow:hidden;background:var(--soft)}
 .canvasbox canvas,.canvasbox img{display:block;width:100%;height:auto}
 #login{max-width:420px}
+.rwinner{display:flex;flex-wrap:wrap;gap:6px;align-items:center;font-size:13px;color:var(--muted)}
+.rwinner select{width:auto}
 .rgrid{display:grid;grid-template-columns:minmax(160px,1fr) minmax(0,1.4fr) minmax(0,1.4fr);gap:8px;align-items:start}
 @media (max-width:820px){.rgrid{grid-template-columns:1fr}}
 .rsong{padding:6px 0}
@@ -131,6 +133,7 @@ td input{padding:3px 6px;font-size:14px}
       <div class="row">
         <label>段階（参加者ができること）<select id="sPhase"></select></label>
         <label>段階の一言（締切など。参加者ページに表示）<input id="sPhaseNote" type="text" placeholder="例 10/20 23:59 まで"></label>
+        <label>リザルト提出の締切（日本時間、空欄なら段階を変えるまで）<input id="sResultDeadline" type="datetime-local"></label>
       </div>
       <p class="note">組み合わせ発表前 → 自選曲の提出 → BAN → 自選曲の決定 → 対戦曲確定 の順に切り替えます。BAN の段階になると、相手の自選曲が参加者に公開されます。</p>
       <h2>新しい対戦カードの既定値（部門ごと）</h2>
@@ -169,7 +172,7 @@ td input{padding:3px 6px;font-size:14px}
           <button type="button" id="resultReload">読み込み直す</button>
         </div>
       </div>
-      <p class="note">段階を「対戦期間」にすると、参加者が対戦曲ごとにリザルト画像を提出できます。画像から読み取った値を本人が確かめて提出し、運営がここ（または Discord のボタン）で承認します。承認済みのリザルトだけが合計に入ります。値が違っていれば直してから承認してください。提出がない場合も、値を入れて承認すれば代わりに記録できます。</p>
+      <p class="note">段階を「対戦期間」にすると、参加者が対戦曲ごとにリザルト画像を提出できます。画像から読み取った値を本人が確かめて提出し、運営がここ（または Discord のボタン）で承認します。承認済みのリザルトだけが合計に入ります。らいむ部門の失点は「MAX − でらっくスコア ＋ CRITICAL PERFECT 以外の BREAK の数 × 2」です。締切までに提出されなかった曲は「未提出」になり、勝敗は自動では決まりません。必要なら試合ごとの「勝敗の決め方」で決めて保存してください。値が違っていれば直してから承認してください。提出がない場合も、値を入れて承認すれば代わりに記録できます。</p>
       <div id="resultList" style="display:grid;gap:12px"></div>
     </section>
 
@@ -211,9 +214,9 @@ td input{padding:3px 6px;font-size:14px}
 </main>
 <canvas id="cv" hidden></canvas>
 
-<script src="config.js?v=20261110a"></script>
-<script src="common.js?v=20261110a"></script>
-<script src="draw.js?v=20261110a"></script>
-<script src="admin.js?v=20261110a"></script>
+<script src="config.js?v=20261110b"></script>
+<script src="common.js?v=20261110b"></script>
+<script src="draw.js?v=20261110b"></script>
+<script src="admin.js?v=20261110b"></script>
 </body>
 </html>

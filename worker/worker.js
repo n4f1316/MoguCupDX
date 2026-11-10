@@ -43,7 +43,9 @@ const CONSTS_URL = 'https://n4f1316.github.io/dxscore-tools/maimai_consts_magica
 const RATE2F_URL = 'https://2frate.want131611.workers.dev/';
 const SESSION_DAYS = 30;
 const PHASES = ['closed', 'select', 'ban', 'pick', 'done', 'play', 'result'];
-// 部門ごとの勝敗の決め方：らいむ＝でらっくスコアの失点（MAX との差）の合計が少ない方、れもん＝達成率の合計が高い方
+// 部門ごとの勝敗の決め方
+//   らいむ：失点（MAX − でらっくスコア ＋ CRITICAL PERFECT 以外の BREAK の数×2）の3曲合計が少ない方
+//   れもん：達成率の3曲合計が高い方
 const METRIC = { lime: 'dx', lemon: 'ach' };
 
 const DEFAULT_SETTINGS = {
@@ -54,6 +56,7 @@ const DEFAULT_SETTINGS = {
   notice: '',          // 参加者ページに出すお知らせ
   phase: 'closed',     // closed：組み合わせ非公開 / select：自選曲の提出 / ban：BAN / pick：自選曲の決定 / done：対戦曲の確定 / play：対戦期間（リザルト提出） / result：結果発表
   phaseNote: '',       // 段階の締切など、参加者ページに出す一言
+  resultDeadline: '',  // リザルト提出の締切（日本時間。例 "2026-11-20T23:59"）。過ぎると提出を受け付けない。空なら段階が変わるまで
   // 部門ごとの、新しく作る対戦カードの既定値（上限・運営課題曲・運営課題曲2）
   divDefaults: { lime: { cap: 13.9, kadai: '', kadai2: '' }, lemon: { cap: 14.9, kadai: '', kadai2: '' } },
   format: 'main',      // main：本編（運営課題曲あり） / mini：mini（運営課題曲なし、自選曲の投げ合いのみ）
@@ -65,7 +68,7 @@ const DEFAULT_SETTINGS = {
     final: '対戦曲は自選曲・他選曲・運営課題曲の3曲です',
   },
 };
-const PUBLIC_KEYS = ['title', 'round', 'entryOpen', 'entryDeadline', 'notice', 'phase', 'phaseNote', 'format', 'notes'];
+const PUBLIC_KEYS = ['title', 'round', 'entryOpen', 'entryDeadline', 'notice', 'phase', 'phaseNote', 'format', 'notes', 'resultDeadline'];
 
 export default {
   async fetch(req, env, ctx) {
@@ -367,12 +370,14 @@ async function me(user, env) {
   // 対戦期間から：自分のリザルトの提出状況。結果発表から：相手の（承認済みの）リザルトも
   for (const [i, x] of c.list.entries()) {
     if (ph < PHASES.indexOf('play')) break;
-    const sel = 'SELECT slot, song_key, dx, dx_max, ach, status, reason, submitted_at FROM results WHERE match_id=? AND entry_id=?';
+    const sel = 'SELECT slot, song_key, dx, dx_max, brk, ach, status, reason, submitted_at FROM results WHERE match_id=? AND entry_id=?';
     matches[i].myResults = (await env.DB.prepare(sel).bind(x.m.id, c.e.id).all()).results;
     if (c.s.phase === 'result' && x.opp) {
       matches[i].oppResults = (await env.DB.prepare(sel).bind(x.m.id, x.opp.id).all()).results
-        .filter((r) => r.status === 'approved').map(({ slot, song_key, dx, dx_max, ach }) => ({ slot, song_key, dx, dx_max, ach, status: 'approved' }));
+        .filter((r) => r.status === 'approved').map(({ slot, song_key, dx, dx_max, brk, ach }) => ({ slot, song_key, dx, dx_max, brk, ach, status: 'approved' }));
     }
+    // 運営が勝敗を手で決めた試合（未提出があるときなど）。結果発表の段階から見せる
+    if (c.s.phase === 'result') matches[i].winner = x.m.winner || '';
   }
   const entryView = c.e && { entryName: c.e.entry_name, xId: c.e.x_id, rating: c.e.rating, frate: c.e.frate, answers: JSON.parse(c.e.answers || '{}') };
   return json({ user: userView(user), settings: publicSettings(c.s), entry: entryView, matches });
@@ -440,7 +445,7 @@ function finalsOf(m, pa, pb, format) {
 
 // 送られた値を確かめる。ach は達成率×10000 の整数（100.5432% → 1005432）
 function readValues(b, metric) {
-  const v = { dx: null, dx_max: null, ach: null };
+  const v = { dx: null, dx_max: null, brk: null, ach: null };
   const has = (x) => x !== undefined && x !== null && String(x).trim() !== '';
   const int = (x) => Number(String(x).replace(/[,\s]/g, ''));
   if (has(b.ach)) {
@@ -454,13 +459,20 @@ function readValues(b, metric) {
     if (!Number.isInteger(dx) || dx < 0 || dx > mx) throw err(400, 'でらっくスコアは 0〜最大値 の範囲で入力してください');
     v.dx = dx; v.dx_max = mx;
   }
+  if (has(b.brk)) {
+    const n = int(b.brk);
+    if (!Number.isInteger(n) || n < 0 || n > 5000) throw err(400, 'CRITICAL PERFECT 以外の BREAK の数を0以上の整数で入力してください');
+    v.brk = n;
+  }
   if (metric === 'dx' && v.dx === null) throw err(400, 'でらっくスコア（例 2,345 / 2,502）を入力してください');
+  if (metric === 'dx' && v.brk === null) throw err(400, 'CRITICAL PERFECT 以外で取った BREAK の数を入力してください（なければ 0）');
   if (metric === 'ach' && v.ach === null) throw err(400, '達成率を入力してください');
   return v;
 }
 
 async function submitResult(req, env, user, ctx) {
   const { b, c, x } = await oneMatch(req, env, user, 'play', '今はリザルトを提出できる期間ではありません');
+  if (pastDeadline(c.s.resultDeadline)) throw err(403, 'リザルトの提出期間は終了しました');
   const isA = x.m.a === c.e.id;
   const finals = finalsOf(x.m, isA ? x.mine : x.theirs, isA ? x.theirs : x.mine, c.s.format);
   const slot = Number(b.slot);
@@ -471,10 +483,10 @@ async function submitResult(req, env, user, ctx) {
   if (!/^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/=]+$/.test(image)) throw err(400, 'リザルト画像を選んでください');
   if (image.length > 1500000) throw err(413, '画像が大きすぎます。もう一度選び直してください');
   const ver = randomHex(4);
-  await env.DB.prepare("INSERT INTO results (match_id, entry_id, slot, song_key, dx, dx_max, ach, image, status, reason, submitted_at, reviewed_at, reviewer, ver) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending', '', datetime('now'), NULL, '', ?) ON CONFLICT(match_id, entry_id, slot) DO UPDATE SET song_key=excluded.song_key, dx=excluded.dx, dx_max=excluded.dx_max, ach=excluded.ach, image=excluded.image, status='pending', reason='', submitted_at=excluded.submitted_at, reviewed_at=NULL, reviewer='', ver=excluded.ver")
-    .bind(x.m.id, c.e.id, slot, finals[slot], v.dx, v.dx_max, v.ach, image, ver).run();
+  await env.DB.prepare("INSERT INTO results (match_id, entry_id, slot, song_key, dx, dx_max, brk, ach, image, status, reason, submitted_at, reviewed_at, reviewer, ver) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', '', datetime('now'), NULL, '', ?) ON CONFLICT(match_id, entry_id, slot) DO UPDATE SET song_key=excluded.song_key, dx=excluded.dx, dx_max=excluded.dx_max, brk=excluded.brk, ach=excluded.ach, image=excluded.image, status='pending', reason='', submitted_at=excluded.submitted_at, reviewed_at=NULL, reviewer='', ver=excluded.ver")
+    .bind(x.m.id, c.e.id, slot, finals[slot], v.dx, v.dx_max, v.brk, v.ach, image, ver).run();
   const job = notifyDiscord(env, { m: x.m, no: x.no, player: c.e.entry_name, slot, key: finals[slot], ver, image, entryId: c.e.id, ...v })
-    .catch((e) => console.error('Discord への通知に失敗しました', e));
+    .catch((e) => console.error(`Discord への通知に失敗しました：${e?.message || e}`));
   if (ctx?.waitUntil) ctx.waitUntil(job); else await job;
   return json({ ok: true });
 }
@@ -484,7 +496,7 @@ const fmtAch = (a) => (a / 10000).toFixed(4) + '%';
 const fmtNum = (n) => Number(n).toLocaleString('en-US');
 function valueText(r) {
   const out = [];
-  if (r.dx !== null && r.dx !== undefined) out.push(`でらっくスコア ${fmtNum(r.dx)} / ${fmtNum(r.dx_max)}（失点 ${fmtNum(r.dx_max - r.dx)}）`);
+  if (r.dx !== null && r.dx !== undefined) out.push(`でらっくスコア ${fmtNum(r.dx)} / ${fmtNum(r.dx_max)}・CRITICAL PERFECT 以外の BREAK ${r.brk ?? '?'}\n失点 -${fmtNum(r.dx_max - r.dx + 2 * (r.brk || 0))}`);
   if (r.ach !== null && r.ach !== undefined) out.push(`達成率 ${fmtAch(r.ach)}`);
   return out.join('\n') || '（値なし）';
 }
@@ -494,7 +506,10 @@ function songText(key, consts) {
   return `${name}（${diff} ${kind}${c !== undefined ? ' ' + c.toFixed(1) : ''}）`;
 }
 async function notifyDiscord(env, r) {
-  if (!env.DISCORD_BOT_TOKEN || !env.DISCORD_CHANNEL_ID) return;
+  if (!env.DISCORD_BOT_TOKEN || !env.DISCORD_CHANNEL_ID) {
+    console.warn(`Discord への通知を送りませんでした：${!env.DISCORD_BOT_TOKEN ? 'シークレット DISCORD_BOT_TOKEN' : ''}${!env.DISCORD_BOT_TOKEN && !env.DISCORD_CHANNEL_ID ? ' と ' : ''}${!env.DISCORD_CHANNEL_ID ? '変数 DISCORD_CHANNEL_ID' : ''} が設定されていません`);
+    return;
+  }
   const consts = await loadConsts(env).catch(() => null);
   const div = DIVISIONS.find((d) => d.id === r.m.div)?.name || '';
   const id = `${r.m.id}|${r.entryId}|${r.slot}|${r.ver}`;
@@ -526,7 +541,13 @@ async function notifyDiscord(env, r) {
   const res = await fetch(`https://discord.com/api/v10/channels/${env.DISCORD_CHANNEL_ID}/messages`, {
     method: 'POST', headers: { Authorization: `Bot ${env.DISCORD_BOT_TOKEN}` }, body: form,
   });
-  if (!res.ok) throw new Error(`Discord ${res.status} ${await res.text()}`);
+  if (!res.ok) {
+    const text = (await res.text()).slice(0, 300);
+    const hint = { 401: 'Bot のトークンが違います', 403: 'Bot がそのチャンネルを見られないか、送信・ファイル添付の権限がありません', 404: 'チャンネル ID が違うか、Bot がそのサーバーに入っていません' }[res.status] || '';
+    throw new Error(`Discord ${res.status}${hint ? `（${hint}）` : ''} ${text}`);
+  }
+  const sent = await res.json().catch(() => ({}));
+  console.log(`Discord に通知しました：チャンネル ${env.DISCORD_CHANNEL_ID}${sent.guild_id ? `（https://discord.com/channels/${sent.guild_id}/${env.DISCORD_CHANNEL_ID}/${sent.id}）` : ''}`);
 }
 
 async function verifyDiscord(env, req, raw) {
@@ -632,7 +653,7 @@ async function admin(req, env, sub, m) {
   if (sub === 'state' && m === 'GET') {
     const { results } = await env.DB.prepare('SELECT * FROM picks').all();
     const picks = results.map((r) => ({ ...r, songs: JSON.parse(r.songs) }));
-    const rs = (await env.DB.prepare('SELECT match_id, entry_id, slot, song_key, dx, dx_max, ach, status, reason, submitted_at, reviewed_at, reviewer, length(image) AS img FROM results').all()).results;
+    const rs = (await env.DB.prepare('SELECT match_id, entry_id, slot, song_key, dx, dx_max, brk, ach, status, reason, submitted_at, reviewed_at, reviewer, length(image) AS img FROM results').all()).results;
     return json({ settings: await getSettings(env), matches: (await getKV(env, 'matches')) ?? [], picks, results: rs });
   }
   if (sub === 'state' && m === 'PUT') {
@@ -652,6 +673,7 @@ async function admin(req, env, sub, m) {
         kadai2: String(x.kadai2 || ''),
         div: DIVISIONS.some((d) => d.id === x.div) ? x.div : '',
         lv14: !!x.lv14,
+        winner: ['a', 'b', 'draw', 'none'].includes(x.winner) ? x.winner : '', // 運営が手で決めた勝敗（空なら自動）
       }));
       await putKV(env, 'matches', ms);
     }
@@ -690,10 +712,10 @@ async function admin(req, env, sub, m) {
         f.status = it.status;
       }
       if (it.reason !== undefined) f.reason = String(it.reason).slice(0, 200);
-      if (['dx', 'dx_max', 'ach'].some((k) => it[k] !== undefined)) {
+      if (['dx', 'dx_max', 'brk', 'ach'].some((k) => it[k] !== undefined)) {
         const div = ms.find((x) => x.id === mid)?.div;
-        const v = readValues({ dx: it.dx, dxMax: it.dx_max, ach: it.ach }, null);
-        if (div && METRIC[div] === 'dx' && v.dx === null) throw err(400, 'らいむ部門はでらっくスコアが必要です');
+        const v = readValues({ dx: it.dx, dxMax: it.dx_max, brk: it.brk, ach: it.ach }, null);
+        if (div && METRIC[div] === 'dx' && (v.dx === null || v.brk === null)) throw err(400, 'らいむ部門はでらっくスコアと、CRITICAL PERFECT 以外の BREAK の数が必要です');
         if (div && METRIC[div] === 'ach' && v.ach === null) throw err(400, 'れもん部門は達成率が必要です');
         Object.assign(f, v);
       }
@@ -729,6 +751,12 @@ async function admin(req, env, sub, m) {
 //  共通
 // ============================================================
 
+// 日本時間の締切（"2026-11-20T23:59"）を過ぎたか。空や読めない値は「過ぎていない」
+function pastDeadline(dl) {
+  if (!dl) return false;
+  const t = Date.parse(dl + ':00+09:00');
+  return !Number.isNaN(t) && Date.now() > t;
+}
 function isOpen(s) {
   if (!s.entryOpen) return false;
   if (!s.entryDeadline) return true;

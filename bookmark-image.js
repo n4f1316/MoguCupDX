@@ -6,7 +6,7 @@
   const BASE = (document.currentScript && document.currentScript.src)
     ? new URL('.', document.currentScript.src).href
     : 'https://n4f1316.github.io/MoguCupDX/';
-  const VERSION = '20261110a';
+  const VERSION = '20261110b';
   const KINDS = [['pair', '組み合わせ発表'], ['reveal', '選曲公開'], ['ban', 'BAN結果'], ['final', '対戦曲'], ['result', '結果発表']];
   const KIND_NAME = { pair: '組み合わせ', reveal: '選曲公開', ban: 'BAN結果', final: '対戦曲', result: '結果発表' };
 
