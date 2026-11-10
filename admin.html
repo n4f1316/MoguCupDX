@@ -6,7 +6,7 @@
 <meta name="robots" content="noindex">
 <title>もぐらたたきカップ 運営</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=M+PLUS+Rounded+1c:wght@500;800&family=Zen+Kaku+Gothic+New:wght@400;700&family=JetBrains+Mono:wght@500&display=swap">
-<link rel="stylesheet" href="common.css?v=20261015p">
+<link rel="stylesheet" href="common.css?v=20261110a">
 <style>
 main{max-width:1280px;margin:0 auto;display:grid;gap:16px}
 .top{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:8px 16px}
@@ -52,6 +52,15 @@ td input{padding:3px 6px;font-size:14px}
 .canvasbox{border:1px solid var(--line);border-radius:8px;overflow:hidden;background:var(--soft)}
 .canvasbox canvas,.canvasbox img{display:block;width:100%;height:auto}
 #login{max-width:420px}
+.rgrid{display:grid;grid-template-columns:minmax(160px,1fr) minmax(0,1.4fr) minmax(0,1.4fr);gap:8px;align-items:start}
+@media (max-width:820px){.rgrid{grid-template-columns:1fr}}
+.rsong{padding:6px 0}
+.rcell{border:1px solid var(--line);border-radius:8px;padding:8px;display:grid;gap:6px;min-width:0}
+.rinputs{display:flex;flex-wrap:wrap;align-items:center;gap:4px}
+.rinputs input{padding:4px 6px;font-size:14px}
+.rimg img{max-width:100%;border-radius:6px;box-shadow:0 0 0 1px var(--line)}
+.rstatus{font-size:12px;font-weight:800;padding:2px 8px;border-radius:999px;white-space:nowrap}
+.st-none{background:var(--soft);color:var(--muted)} .st-pending{background:#fff4d6;color:#8a5a00} .st-ok{background:#dff3e6;color:#1d7a43} .st-ng{background:#fde4e6;color:#b42332}
 .bmbox{border-top:1px solid var(--line);padding-top:12px;display:grid;gap:8px}
 .bmbox h2{margin:0}
 .bmbox ol{margin:0;padding-left:1.4em;display:grid;gap:2px}
@@ -86,6 +95,7 @@ td input{padding:3px 6px;font-size:14px}
       <button type="button" role="tab" data-tab="entries" aria-selected="true">参加者</button>
       <button type="button" role="tab" data-tab="settings" aria-selected="false">大会設定</button>
       <button type="button" role="tab" data-tab="matches" aria-selected="false">組み合わせ・選曲</button>
+      <button type="button" role="tab" data-tab="results" aria-selected="false" id="resultTab">リザルト</button>
       <button type="button" role="tab" data-tab="images" aria-selected="false">告知画像</button>
     </div>
 
@@ -131,6 +141,7 @@ td input{padding:3px 6px;font-size:14px}
       <label>選曲公開<input id="nReveal" type="text"></label>
       <label>BAN結果<input id="nBan" type="text"></label>
       <label>対戦曲<input id="nFinal" type="text"></label>
+      <label>結果発表<input id="nResult" type="text"></label>
     </section>
 
     <section class="panel" data-pane="matches" hidden>
@@ -149,6 +160,19 @@ td input{padding:3px 6px;font-size:14px}
       <div id="matchList" style="display:grid;gap:12px"></div>
     </section>
 
+    <section class="panel" data-pane="results" hidden>
+      <div class="btns" style="justify-content:space-between">
+        <h2 style="margin:0">リザルト</h2>
+        <div class="btns">
+          <select id="resultDiv" aria-label="部門で絞り込む" style="width:auto"></select>
+          <label style="display:flex;gap:6px;align-items:center;color:var(--fg)"><input id="resultPending" type="checkbox">承認待ちがある試合だけ</label>
+          <button type="button" id="resultReload">読み込み直す</button>
+        </div>
+      </div>
+      <p class="note">段階を「対戦期間」にすると、参加者が対戦曲ごとにリザルト画像を提出できます。画像から読み取った値を本人が確かめて提出し、運営がここ（または Discord のボタン）で承認します。承認済みのリザルトだけが合計に入ります。値が違っていれば直してから承認してください。提出がない場合も、値を入れて承認すれば代わりに記録できます。</p>
+      <div id="resultList" style="display:grid;gap:12px"></div>
+    </section>
+
     <section class="panel" data-pane="images" hidden>
       <div class="tabs" role="group" aria-label="部門" id="imgDiv"></div>
       <div class="btns">
@@ -157,6 +181,7 @@ td input{padding:3px 6px;font-size:14px}
           <button type="button" data-kind="reveal" aria-selected="false">選曲公開</button>
           <button type="button" data-kind="ban" aria-selected="false">BAN結果</button>
           <button type="button" data-kind="final" aria-selected="false">対戦曲</button>
+          <button type="button" data-kind="result" aria-selected="false">結果発表</button>
         </div>
         <label id="imgMatchWrap" hidden style="min-width:240px">対象の試合<select id="imgMatch"></select></label>
       </div>
@@ -168,7 +193,7 @@ td input{padding:3px 6px;font-size:14px}
       </div>
       <div class="bmbox">
         <h2>ジャケット入りの告知画像を作る</h2>
-        <p class="note">ジャケットは公式サイトの画像のため、このページではプレビューとして表示するだけで、ジャケット入りの画像は保存できません（組み合わせ発表はジャケットを使わないので、ここで保存できます）。選曲公開・BAN結果・対戦曲は、maimaidx.jp の上で動く告知画像用のブックマークで作ってください。画像はそのブラウザの中で作るだけで、どこにも置きません。</p>
+        <p class="note">ジャケットは公式サイトの画像のため、このページではプレビューとして表示するだけで、ジャケット入りの画像は保存できません（組み合わせ発表はジャケットを使わないので、ここで保存できます）。選曲公開・BAN結果・対戦曲・結果発表は、maimaidx.jp の上で動く告知画像用のブックマークで作ってください。画像はそのブラウザの中で作るだけで、どこにも置きません。</p>
         <ol class="note">
           <li>下のボタンをブックマークバーへドラッグして登録する（できない場合は「コードをコピー」で、URL欄にコードを貼ったブックマークを作る）</li>
           <li>ここで部門を選び「画像用データをコピー」を押す</li>
@@ -186,9 +211,9 @@ td input{padding:3px 6px;font-size:14px}
 </main>
 <canvas id="cv" hidden></canvas>
 
-<script src="config.js?v=20261015p"></script>
-<script src="common.js?v=20261015p"></script>
-<script src="draw.js?v=20261015p"></script>
-<script src="admin.js?v=20261015p"></script>
+<script src="config.js?v=20261110a"></script>
+<script src="common.js?v=20261110a"></script>
+<script src="draw.js?v=20261110a"></script>
+<script src="admin.js?v=20261110a"></script>
 </body>
 </html>

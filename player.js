@@ -1,7 +1,7 @@
 // もぐらたたきカップ 参加者ページ
 const $ = (s, r = document) => r.querySelector(s);
 const TOKEN_STORE = window.MOGU_DEMO ? 'mogucupdx-demo-session' : 'mogucupdx-session'; // デモは本番と別に保存
-const PHASE_LABEL = { closed: '組み合わせ発表前', select: '自選曲の提出', ban: 'BAN', pick: '自選曲の決定', done: '対戦曲確定' };
+const PHASE_LABEL = { closed: '組み合わせ発表前', select: '自選曲の提出', ban: 'BAN', pick: '自選曲の決定', done: '対戦曲確定', play: '対戦期間（リザルト提出）', result: '結果発表' };
 const PAGE_SIZE = 50;
 
 let token = '';
@@ -229,7 +229,7 @@ function renderMatch(box, m, phase) {
   const facts = el('dl', 'facts');
   facts.innerHTML = `<dt>自選曲の上限</dt><dd>譜面定数 <b>${fmtConst(Number(m.cap))}</b> 以下${m.lv14 ? '<span class="lv14">Lv14 解禁：上限を超えるレベル14を1曲まで</span>' : ''}</dd>`;
   box.append(facts);
-  if (m.kadai && phase !== 'done') { box.append(el('div', 'slotno', '運営課題曲')); box.append(songEl(m.kadai)); }
+  if (m.kadai && ['select', 'ban', 'pick'].includes(phase)) { box.append(el('div', 'slotno', '運営課題曲')); box.append(songEl(m.kadai)); }
   const img = matchImage(m, phase);
   if (img) box.append(img);
 
@@ -237,18 +237,20 @@ function renderMatch(box, m, phase) {
   else if (phase === 'ban') renderBan(box, m);
   else if (phase === 'pick') renderPick(box, m);
   else if (phase === 'done') renderDone(box, m);
+  else if (phase === 'play') renderPlay(box, m);
+  else if (phase === 'result') renderResult(box, m);
 }
 
 // 運営の告知画像と同じ形の表示。段階に合わせて見せる範囲を広げる。表示だけで保存はしない
 //   BAN：選曲公開（両者の自選曲）／自選曲の決定：BAN結果／対戦曲確定：対戦曲（BAN と自選曲つき）
 const imgCache = new Map();
-const IMG_KIND = { ban: 'reveal', pick: 'ban', done: 'final' };
+const IMG_KIND = { ban: 'reveal', pick: 'ban', done: 'final', play: 'final', result: 'result' };
 function matchImage(m, phase) {
   const kind = IMG_KIND[phase];
   if (!kind || !window.DrawKit || m.mySongs.length !== 3 || !m.oppSongs || m.oppSongs.length !== 3) return null;
   const ch = (k) => (k && charts?.byKey.get(k)) || null;
   const meName = ME.entry.entryName, opName = m.opponent?.entryName || '相手';
-  const done = kind === 'final', bans = kind !== 'reveal';
+  const done = kind === 'final' || kind === 'result', bans = kind !== 'reveal';
   const myPick = done ? m.myPick : -1, opPick = done && m.oppPick != null ? m.oppPick : -1;
   const match = {
     aName: meName, bName: opName,
@@ -259,6 +261,7 @@ function matchImage(m, phase) {
       aKey: myPick >= 0 ? m.mySongs[myPick] : '', bKey: opPick >= 0 ? m.oppSongs[opPick] : '',
     }).map((f) => ({ ...f, s: ch(f.key) })),
   };
+  if (kind === 'result') Object.assign(match, resultRows(m, match.finals));
   const matches = []; matches[m.no - 1] = match; // 画像の MATCH 番号を合わせる
   const view = { title: ME.settings.title, badge: divName(m.div), badgeColor: DIV_COLOR[m.div], notes: ME.settings.notes || {}, matches };
   const key = JSON.stringify([kind, match, view.title, view.notes]);
@@ -266,7 +269,7 @@ function matchImage(m, phase) {
   if (imgCache.has(key)) { wrap.append(imgCache.get(key)); return wrap; }
   const cv = document.createElement('canvas');
   cv.setAttribute('role', 'img');
-  cv.setAttribute('aria-label', { reveal: '選曲公開', ban: 'BAN結果', final: '対戦曲' }[kind] + 'の画像');
+  cv.setAttribute('aria-label', { reveal: '選曲公開', ban: 'BAN結果', final: '対戦曲', result: '結果発表' }[kind] + 'の画像');
   wrap.append(cv);
   DrawKit.render(cv, view, kind, m.no - 1, { preview: true }).then(() => imgCache.set(key, cv)).catch(() => wrap.remove());
   return wrap;
@@ -425,6 +428,187 @@ function renderDone(box, m) {
   });
   if (list[0].kind === 'both') box.append(el('p', 'note', ME.settings.format === 'mini' ? '両者が同じ曲を自選曲にしました。' : '両者が同じ曲を自選曲にしたため、運営課題曲が2曲になります。'));
   list.forEach((f) => { box.append(el('div', 'slotno', f.label)); box.append(songEl(f.key)); });
+}
+
+// ============================================================
+//  対戦期間：リザルトの提出（画像から値を読み取り、確認してから送る）
+// ============================================================
+// 対戦曲（自分が A の並び）と、サーバーの「何曲目か」の対応
+function myFinals(m) {
+  return finalSongs({
+    format: ME.settings.format, kadai: m.kadai, kadai2: m.kadai2, aName: 'あなた', bName: m.opponent?.entryName || '相手',
+    aKey: m.myPick >= 0 ? m.mySongs[m.myPick] : '', bKey: m.oppPick >= 0 && m.oppSongs ? m.oppSongs[m.oppPick] : '',
+  }).map((f) => ({ ...f, slot: (m.finals || []).indexOf(f.key) }));
+}
+// 画像用：対戦曲ごとの両者のリザルトと合計
+function resultRows(m, finals) {
+  const metric = m.metric || METRIC[m.div] || 'ach';
+  const bySlot = (list, slot) => (list || []).find((r) => r.slot === slot) || null;
+  const rows = finals.map((f) => {
+    const slot = (m.finals || []).indexOf(f.key);
+    return { s: f.s, label: f.label, a: bySlot(m.myResults, slot), b: bySlot(m.oppResults, slot) };
+  });
+  return { metric, rows, score: resultScore(metric, rows) };
+}
+const STATUS = { pending: ['承認待ち', 'st-pending'], approved: ['承認済み', 'st-ok'], rejected: ['却下', 'st-ng'] };
+function valueLine(metric, r) {
+  if (!r) return '';
+  if (metric === 'dx') return r.dx != null ? `でらっくスコア ${fmtNum(r.dx)} / ${fmtNum(r.dx_max)}（失点 ${fmtNum(r.dx_max - r.dx)}）` : '';
+  return r.ach != null ? `達成率 ${fmtAch(r.ach)}` : '';
+}
+
+function renderPlay(box, m) {
+  const metric = m.metric || METRIC[m.div];
+  box.append(el('h2', '', 'リザルトの提出'));
+  box.append(el('p', 'note', metric === 'dx'
+    ? 'この部門は、でらっくスコアの失点（MAX との差）の3曲合計が少ない方の勝ちです。曲ごとにリザルト画像を選ぶと、でらっくスコアを読み取ります。値を確かめてから提出してください。'
+    : 'この部門は、達成率の3曲合計が高い方の勝ちです。曲ごとにリザルト画像を選ぶと、達成率を読み取ります。値を確かめてから提出してください。'));
+  box.append(el('p', 'note', 'でらっくす NET のプレイ履歴（詳細）のスクリーンショットが一番正確に読み取れます。ゲーム機の画面の写真でも提出できます。期間中は何度でも出し直せます（出し直すと承認待ちに戻ります）。'));
+  for (const f of myFinals(m)) {
+    const r = (m.myResults || []).find((x) => x.slot === f.slot) || null;
+    const card = el('div', 'rcard');
+    const st = r ? STATUS[r.status] || STATUS.pending : ['未提出', 'st-none'];
+    card.append(el('div', 'slotno', f.label));
+    card.append(songEl(f.key, el('span', 'rstatus ' + st[1], st[0])));
+    if (r) card.append(el('div', 'rval', valueLine(metric, r)));
+    if (r?.status === 'rejected') card.append(el('p', 'warn', `却下の理由：${r.reason || '（理由なし）'}。もう一度提出してください。`));
+    if (f.slot < 0 || !f.key) { card.append(el('p', 'note', '対戦曲が決まっていません。運営に連絡してください。')); box.append(card); continue; }
+    const open = el('button', r ? '' : 'primary', r ? '出し直す' : 'リザルトを提出');
+    open.type = 'button';
+    const form = el('div', 'rform'); form.hidden = true;
+    open.onclick = () => { form.hidden = !form.hidden; if (!form.hidden && !form.childElementCount) buildResultForm(form, m, f, metric); };
+    const w = el('div', 'btns'); w.append(open);
+    card.append(w, form);
+    box.append(card);
+  }
+}
+
+function buildResultForm(form, m, f, metric) {
+  const file = el('input'); file.type = 'file'; file.accept = 'image/*';
+  const pick = el('label', 'filebtn'); pick.append(el('span', '', 'リザルト画像を選ぶ'), file);
+  const prev = el('img', 'rprev'); prev.alt = '選んだリザルト画像'; prev.hidden = true;
+  const ocrNote = el('p', 'note', '');
+  const num = (label, ph, mode = 'numeric') => {
+    const l = el('label', '', label); const i = el('input'); i.type = 'text'; i.inputMode = mode; i.placeholder = ph; l.append(i); return [l, i];
+  };
+  const [lDx, iDx] = num('でらっくスコア', '例 2345');
+  const [lMax, iMax] = num('でらっくスコアの最大値（MAX）', '例 2502');
+  const [lAch, iAch] = num('達成率（%）', '例 100.5432', 'decimal');
+  const row = el('div', 'row');
+  if (metric === 'dx') row.append(lDx, lMax); else row.append(lAch);
+  const send = el('button', 'primary', 'この内容で提出'); send.type = 'button'; send.disabled = true;
+  const btns = el('div', 'btns'); btns.append(send);
+  form.append(pick, prev, ocrNote, row, btns);
+  let image = '';
+  file.onchange = async () => {
+    const fl = file.files?.[0]; if (!fl) return;
+    send.disabled = true;
+    try {
+      const { dataURL, canvas } = await compressImage(fl);
+      image = dataURL; prev.src = dataURL; prev.hidden = false;
+      send.disabled = false;
+      ocrNote.textContent = '画像から値を読み取っています…（初回は少し時間がかかります）';
+      const v = await readScore(canvas);
+      if (metric === 'dx' && v.dx != null) { iDx.value = v.dx; iMax.value = v.dxMax; }
+      if (metric === 'ach' && v.ach != null) iAch.value = v.ach;
+      const got = metric === 'dx' ? v.dx != null : v.ach != null;
+      ocrNote.textContent = got ? '読み取った値を入れました。画像と見比べて、違っていたら直してから提出してください。' : '値を読み取れませんでした。画像を見ながら入力してください。';
+    } catch (e) {
+      ocrNote.textContent = image ? '値を読み取れませんでした。画像を見ながら入力してください。' : e.message;
+    }
+  };
+  send.onclick = async () => {
+    send.disabled = true;
+    try {
+      const body = { matchId: m.id, slot: f.slot, image };
+      if (metric === 'dx') Object.assign(body, { dx: iDx.value, dxMax: iMax.value }); else body.ach = iAch.value;
+      await api('api/me/result', { method: 'POST', key: token, body });
+      setMsg('リザルトを提出しました。運営の承認をお待ちください', 'ok');
+      await refresh();
+    } catch (e) { setMsg(e.message, 'err'); send.disabled = false; }
+  };
+}
+
+// 画像を JPEG に縮めて送る（デモはブラウザに保存するので、さらに小さくする）
+async function compressImage(fileObj) {
+  const url = URL.createObjectURL(fileObj);
+  try {
+    const img = await new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = () => rej(new Error('画像を読み込めませんでした')); i.src = url; });
+    const max = window.MOGU_DEMO ? 720 : 1600;
+    const k = Math.min(1, max / Math.max(img.naturalWidth, img.naturalHeight));
+    const cv = document.createElement('canvas');
+    cv.width = Math.round(img.naturalWidth * k); cv.height = Math.round(img.naturalHeight * k);
+    cv.getContext('2d').drawImage(img, 0, 0, cv.width, cv.height);
+    let q = window.MOGU_DEMO ? 0.6 : 0.85, dataURL = cv.toDataURL('image/jpeg', q);
+    while (dataURL.length > 1400000 && q > 0.4) { q -= 0.1; dataURL = cv.toDataURL('image/jpeg', q); }
+    return { dataURL, canvas: cv };
+  } finally { URL.revokeObjectURL(url); }
+}
+
+// 文字の読み取り（Tesseract.js をそのときだけ読み込む。画像はこのブラウザの中で読み、外には送らない）
+let tessReady = null, tessWorker = null;
+function loadTesseract() {
+  if (window.Tesseract) return Promise.resolve(window.Tesseract);
+  tessReady ||= new Promise((res, rej) => {
+    const sc = document.createElement('script');
+    sc.src = 'https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js';
+    sc.onload = () => res(window.Tesseract);
+    sc.onerror = () => { tessReady = null; rej(new Error('読み取りの準備ができませんでした')); };
+    document.head.append(sc);
+  });
+  return tessReady;
+}
+async function readScore(canvas) {
+  const T = await loadTesseract();
+  if (!tessWorker) {
+    tessWorker = await T.createWorker('eng');
+    await tessWorker.setParameters({ tessedit_char_whitelist: '0123456789.,/%' });
+  }
+  // 白黒をはっきりさせて読みやすくする
+  const g = document.createElement('canvas');
+  g.width = canvas.width; g.height = canvas.height;
+  const c2 = g.getContext('2d');
+  c2.filter = 'grayscale(1) contrast(1.6)';
+  c2.drawImage(canvas, 0, 0);
+  const { data } = await tessWorker.recognize(g);
+  return parseScore(data.text || '');
+}
+// 読み取った文字から、達成率（100.5432%）とでらっくスコア（2,345 / 2,502）を探す
+function parseScore(text) {
+  const t = text.replace(/\s+/g, ' ');
+  let ach = null;
+  for (const mm of t.matchAll(/(\d{1,3})[.,](\d{4})/g)) {
+    const v = Number(`${mm[1]}.${mm[2]}`);
+    if (v <= 101 && (ach === null || v > Number(ach))) ach = `${mm[1]}.${mm[2]}`;
+  }
+  let dx = null, dxMax = null;
+  for (const mm of t.matchAll(/(\d[\d,.]{0,6})\s*\/\s*(\d[\d,.]{0,6})/g)) {
+    const a = Number(mm[1].replace(/[,.]/g, '')), b = Number(mm[2].replace(/[,.]/g, ''));
+    if (b >= 300 && b <= 12000 && b % 3 === 0 && a <= b) { dx = a; dxMax = b; break; }
+  }
+  return { ach, dx, dxMax };
+}
+
+// ============================================================
+//  結果発表
+// ============================================================
+function renderResult(box, m) {
+  const metric = m.metric || METRIC[m.div];
+  const fs = myFinals(m).map((f) => ({ ...f, s: charts?.byKey.get(f.key) || null }));
+  const { rows, score } = resultRows(m, fs);
+  box.append(el('h2', '', '結果'));
+  const res = score.winner === 'a' ? 'あなたの勝ちです' : score.winner === 'b' ? 'あなたの負けです' : score.winner === 'draw' ? '引き分けです' : '集計中です（承認されていないリザルトがあります）';
+  box.append(el('p', 'rwin', res));
+  const facts = el('dl', 'facts');
+  facts.innerHTML = `<dt>あなた</dt><dd>${score.a.done ? scoreText(metric, score.a.total) : '集計中'}</dd><dt>${esc(m.opponent?.entryName || '相手')}</dt><dd>${score.b.done ? scoreText(metric, score.b.total) : '集計中'}</dd>`;
+  box.append(facts);
+  rows.forEach((r, i) => {
+    box.append(el('div', 'slotno', fs[i].label));
+    box.append(songEl(fs[i].key));
+    const v = el('div', 'rval');
+    v.append(el('div', '', `あなた：${valueLine(metric, r.a) || '—'}`), el('div', '', `${m.opponent?.entryName || '相手'}：${valueLine(metric, r.b) || '—'}`));
+    box.append(v);
+  });
 }
 
 refresh();

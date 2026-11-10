@@ -79,6 +79,26 @@ function finalSongs({ format, aKey, bKey, aName, bName, kadai, kadai2 }) {
 }
 const fmtConst = (c) => (Math.round(c * 10) / 10).toFixed(1);
 
+// ---------- リザルトと勝敗 ----------
+// らいむ部門：でらっくスコアの失点（MAX との差）の3曲合計が少ない方の勝ち
+// れもん部門：達成率の3曲合計が高い方の勝ち
+const METRIC = { lime: 'dx', lemon: 'ach' };
+const fmtAch = (a) => (a / 10000).toFixed(4) + '%';
+const fmtNum = (n) => Number(n).toLocaleString('en-US');
+const resultOK = (metric, r) => !!r && r.status === 'approved' && (metric === 'dx' ? r.dx != null && r.dx_max != null : r.ach != null);
+// rows：[{ a: リザルト|null, b: リザルト|null }]（対戦曲ごと）
+function resultScore(metric, rows) {
+  const side = (k) => ({
+    total: rows.reduce((t, x) => t + (resultOK(metric, x[k]) ? (metric === 'dx' ? x[k].dx_max - x[k].dx : x[k].ach) : 0), 0),
+    done: rows.length > 0 && rows.every((x) => resultOK(metric, x[k])),
+  });
+  const a = side('a'), b = side('b');
+  let winner = null;
+  if (a.done && b.done) winner = a.total === b.total ? 'draw' : (metric === 'dx' ? a.total < b.total : a.total > b.total) ? 'a' : 'b';
+  return { metric, a, b, winner };
+}
+const scoreText = (metric, total) => (metric === 'dx' ? `失点 ${fmtNum(total)}` : fmtAch(total));
+
 // 全譜面の一覧を読み込む（{ key, name, kind, diff, c, lv, img }）
 let chartsPromise = null;
 function loadCharts() {

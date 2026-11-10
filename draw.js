@@ -6,6 +6,8 @@ var DrawKit = window.DrawKit || (() => {
   const DIFF_COLOR = { BASIC: '#2E9E5B', ADVANCED: '#D98E04', EXPERT: '#E0434B', MASTER: '#8E44D6', 'Re:MASTER': '#B68BE0' };
   const DIFF_SHORT = { BASIC: 'BAS', ADVANCED: 'ADV', EXPERT: 'EXP', MASTER: 'MAS', 'Re:MASTER': 'Re:MAS' };
   const fmtConst = (c) => (Math.round(c * 10) / 10).toFixed(1);
+  const fmtAch = (a) => (a / 10000).toFixed(4) + '%';
+  const fmtNum = (n) => Number(n).toLocaleString('en-US');
   const C = { bg1: '#f6f9fd', bg2: '#e4eef8', hole: 'rgba(42,111,184,.06)', card: '#ffffff', card2: '#eef5fc', fg: '#1f2d3d', mute: '#5b6f86', accent: '#2a6fb8', ban: '#d93a49', gold: '#f0b429', goldText: '#9a6400', jk: '#dbe7f3', line: '#d6e2ee', onAccent: '#ffffff' };
   const FD = '"M PLUS Rounded 1c","Hiragino Maru Gothic ProN",sans-serif';
   const FB = '"Zen Kaku Gothic New","Hiragino Sans","Noto Sans JP",sans-serif';
@@ -261,6 +263,54 @@ var DrawKit = window.DrawKit || (() => {
     footer(h, V.notes.final);
   }
 
+  // 結果発表：両者の合計と勝者、対戦曲ごとのスコア
+  // m.metric：'dx'（らいむ・失点の少ない方が勝ち）／'ach'（れもん・達成率の合計が高い方が勝ち）
+  // m.rows：[{ s, label, a: { dx, dx_max, ach }|null, b: … }]、m.score：{ a: { total, done }, b, winner }
+  function drawResult(m, i, imgs) {
+    const n = m.rows.length, rh = 150, gap = 44, top = 440;
+    const h = top + 40 + n * (rh + gap) + 50;
+    base(h, `結果発表　${label(i + 1)}`);
+    const dx = m.metric === 'dx';
+    const sc = m.score || { a: {}, b: {}, winner: null };
+    // 上段：両者の名前・合計・勝敗
+    const panel = (side, x) => {
+      const win = sc.winner === side, draw = sc.winner === 'draw', s1 = sc[side] || {};
+      rr(x, 228, 640, 176, 18); ctx.fillStyle = win ? '#fff8e6' : C.card; ctx.fill();
+      ctx.lineWidth = win ? 4 : 1.5; ctx.strokeStyle = win ? C.gold : C.line; ctx.stroke();
+      fit(side === 'a' ? m.aName : m.bName, x + 28, 286, 420, 40, 800, FD, 'left', C.fg);
+      const total = s1.done ? (dx ? `失点 ${fmtNum(s1.total)}` : fmtAch(s1.total)) : '集計中';
+      fit(total, x + 28, 370, 600, 58, 800, FM, 'left', s1.done ? C.fg : C.mute);
+      const tag = sc.winner ? (draw ? 'DRAW' : win ? 'WIN' : 'LOSE') : '';
+      if (tag) {
+        ctx.font = `800 34px ${FD}`;
+        const tw = ctx.measureText(tag).width + 40;
+        rr(x + 640 - tw - 22, 250, tw, 54, 27); ctx.fillStyle = win ? C.gold : draw ? C.accent : C.jk; ctx.fill();
+        ctx.fillStyle = win ? C.fg : draw ? C.onAccent : C.mute; ctx.textAlign = 'center'; ctx.fillText(tag, x + 640 - 22 - tw / 2, 289);
+      }
+    };
+    panel('a', 80); panel('b', 880);
+    fit('VS', W / 2, 336, 120, 52, 800, FD, 'center', C.accent);
+    fit(dx ? 'でらっくスコアの失点（MAX との差）の合計が少ない方の勝ち' : '達成率の合計が高い方の勝ち', W / 2, top, W - 160, 22, 700, FB, 'center', C.mute);
+    // 対戦曲ごと
+    const val = (r) => (!r ? null : dx ? (r.dx != null ? { big: `${fmtNum(r.dx)} / ${fmtNum(r.dx_max)}`, small: `失点 ${fmtNum(r.dx_max - r.dx)}`, v: r.dx_max - r.dx } : null) : (r.ach != null ? { big: fmtAch(r.ach), small: '', v: r.ach } : null));
+    m.rows.forEach((row, k) => {
+      const y = top + 56 + k * (rh + gap);
+      songCard(row.s, 540, y, 520, rh, { img: row.s && imgs.get(row.s.key), empty: '未定' });
+      const va = val(row.a), vb = val(row.b);
+      const better = va && vb ? (va.v === vb.v ? '' : (dx ? va.v < vb.v : va.v > vb.v) ? 'a' : 'b') : '';
+      const box = (v, x, side) => {
+        rr(x, y, 440, rh, 16); ctx.fillStyle = better === side ? '#fff8e6' : C.card; ctx.fill();
+        ctx.lineWidth = better === side ? 3 : 1.5; ctx.strokeStyle = better === side ? C.gold : C.line; ctx.stroke();
+        if (!v) { fit('未提出', x + 220, y + rh / 2 + 12, 400, 32, 700, FB, 'center', C.mute); return; }
+        fit(v.big, x + 220, y + (v.small ? 72 : 90), 400, 44, 800, FM, 'center', C.fg);
+        if (v.small) fit(v.small, x + 220, y + 118, 400, 26, 700, FB, 'center', C.mute);
+      };
+      box(va, 80, 'a'); box(vb, 1080, 'b');
+      fit(row.label || '', 548, y - 12, 504, 22, 700, FB, 'left', C.mute);
+    });
+    footer(h, V.notes.result);
+  }
+
   // view: { title, badge, notes, matches:[{ aName, bName, aSongs, bSongs, aBan, aPick, bBan, bPick, cap, finals:[{ s, label, kind }] }] }
   // 描画は1枚ずつ順番に行う（同時に呼ばれても描き先が混ざらないように）
   let queue = Promise.resolve();
@@ -276,10 +326,13 @@ var DrawKit = window.DrawKit || (() => {
     if (kind === 'pair') { drawPair(); return; }
     const m = V.matches[idx];
     if (!m) { base(400, '対戦カードがありません'); return; }
-    const charts = [...m.aSongs, ...m.bSongs, ...(kind === 'final' ? m.finals.map((f) => f.s) : [])].filter(Boolean);
+    const charts = (kind === 'result' ? (m.rows || []).map((r) => r.s) : [...m.aSongs, ...m.bSongs, ...(kind === 'final' ? m.finals.map((f) => f.s) : [])]).filter(Boolean);
     const imgs = new Map();
     await Promise.all(charts.map(async (s) => imgs.set(s.key, await loadJacket(s.img, opt.preview))));
-    if (kind === 'reveal') drawReveal(m, idx, imgs); else if (kind === 'ban') drawBan(m, idx, imgs); else drawFinal(m, idx, imgs);
+    if (kind === 'reveal') drawReveal(m, idx, imgs);
+    else if (kind === 'ban') drawBan(m, idx, imgs);
+    else if (kind === 'result') { if (!m.rows) { base(400, '結果はまだありません'); return; } drawResult(m, idx, imgs); }
+    else drawFinal(m, idx, imgs);
   }
   return { render };
 })();

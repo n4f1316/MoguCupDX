@@ -6,9 +6,9 @@
   const BASE = (document.currentScript && document.currentScript.src)
     ? new URL('.', document.currentScript.src).href
     : 'https://n4f1316.github.io/MoguCupDX/';
-  const VERSION = '20261015p';
-  const KINDS = [['pair', '組み合わせ発表'], ['reveal', '選曲公開'], ['ban', 'BAN結果'], ['final', '対戦曲']];
-  const KIND_NAME = { pair: '組み合わせ', reveal: '選曲公開', ban: 'BAN結果', final: '対戦曲' };
+  const VERSION = '20261110a';
+  const KINDS = [['pair', '組み合わせ発表'], ['reveal', '選曲公開'], ['ban', 'BAN結果'], ['final', '対戦曲'], ['result', '結果発表']];
+  const KIND_NAME = { pair: '組み合わせ', reveal: '選曲公開', ban: 'BAN結果', final: '対戦曲', result: '結果発表' };
 
   if (location.hostname !== 'maimaidx.jp') {
     alert('maimai でらっくす NET（https://maimaidx.jp/）を開いた状態で押してください。');
@@ -160,7 +160,7 @@
   function missingJackets(t) {
     if (kind === 'pair') return 0;
     const m = sets[t.si].view.matches[t.idx]; if (!m) return 0;
-    const songs = [...m.aSongs, ...m.bSongs, ...(kind === 'final' ? m.finals.map((f) => f.s) : [])].filter(Boolean);
+    const songs = (kind === 'result' ? (m.rows || []).map((r) => r.s) : [...m.aSongs, ...m.bSongs, ...(kind === 'final' ? m.finals.map((f) => f.s) : [])]).filter(Boolean);
     return songs.filter((s) => !s.img).length;
   }
   async function render() {

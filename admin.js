@@ -10,6 +10,7 @@ let settings = null;   // 大会設定
 // aBan：A の自選曲のうち（B に）BAN された番号、aPick：A が決めた自選曲の番号
 let matches = [];      // [{ id, a, b, cap, kadai, aSongs:[key×3], bSongs, aBan, aPick, bBan, bPick, edited }]
 let charts = null;     // { list, byKey }
+let results = [];     // リザルト（画像なし）：[{ match_id, entry_id, slot, dx, dx_max, ach, status, reason, img, ... }]
 let dirty = false;
 
 function setMsg(t, cls = '') { const m = $('#msg'); m.textContent = t; m.className = 'msg ' + cls; }
@@ -40,7 +41,7 @@ async function start(fromForm) {
   setMsg('読み込んでいます…');
   try {
     const [e, st] = await Promise.all([api('api/admin/entries', { key: KEY }), api('api/admin/state', { key: KEY })]);
-    entries = e.entries; settings = st.settings; matches = buildMatches(st.matches, st.picks);
+    entries = e.entries; settings = st.settings; matches = buildMatches(st.matches, st.picks); results = st.results || [];
     if (fromForm) {
       try {
         const store = $('#remember').checked ? localStorage : sessionStorage;
@@ -109,6 +110,7 @@ function renderAll() {
   renderEntries();
   renderSettingsForm();
   renderMatches();
+  renderResults();
   if (tab === 'images') renderImage();
 }
 
@@ -288,7 +290,7 @@ function makePicker({ id, value, onChange, cap = null, lv14 = false, placeholder
 
 // ---------- 大会設定 ----------
 const isMini = () => settings?.format === 'mini';
-const PHASE_LABEL = { closed: '組み合わせ発表前（参加者に対戦カードを見せない）', select: '自選曲の提出', ban: 'BAN', pick: '自選曲の決定', done: '対戦曲確定' };
+const PHASE_LABEL = { closed: '組み合わせ発表前（参加者に対戦カードを見せない）', select: '自選曲の提出', ban: 'BAN', pick: '自選曲の決定', done: '対戦曲確定', play: '対戦期間（リザルトの提出）', result: '結果発表（参加者に結果を見せる）' };
 const defOf = (div) => settings.divDefaults?.[div] || { cap: 14, kadai: '', kadai2: '' };
 function renderSettingsForm() {
   const s = settings;
@@ -296,7 +298,7 @@ function renderSettingsForm() {
   $('#sDeadline').value = s.entryDeadline || ''; $('#sNotice').value = s.notice || '';
   $('#sPhase').innerHTML = Object.entries(PHASE_LABEL).map(([k, v]) => `<option value="${k}"${k === s.phase ? ' selected' : ''}>${v}</option>`).join('');
   $('#sPhaseNote').value = s.phaseNote || '';
-  $('#nPair').value = s.notes.pair; $('#nReveal').value = s.notes.reveal; $('#nBan').value = s.notes.ban || ''; $('#nFinal').value = s.notes.final;
+  $('#nPair').value = s.notes.pair; $('#nReveal').value = s.notes.reveal; $('#nBan').value = s.notes.ban || ''; $('#nFinal').value = s.notes.final; $('#nResult').value = s.notes.result || '';
   $('#sFormat').value = s.format || 'main';
   const box = $('#divDefaults');
   box.replaceChildren();
@@ -326,7 +328,7 @@ function readSettingsForm() {
     const inp = $(`#dd-${d.id}-cap`);
     settings.divDefaults[d.id] = { ...defOf(d.id), ...(inp ? { cap: Number(inp.value) || 15 } : {}) };
   });
-  settings.notes = { pair: $('#nPair').value, reveal: $('#nReveal').value, ban: $('#nBan').value, final: $('#nFinal').value };
+  settings.notes = { pair: $('#nPair').value, reveal: $('#nReveal').value, ban: $('#nBan').value, final: $('#nFinal').value, result: $('#nResult').value };
 }
 $('[data-pane=settings]').addEventListener('input', (e) => {
   if (e.target.closest('.picker')) return;
@@ -512,8 +514,26 @@ function viewModel(div = curDiv) {
         aKey: m.aPick >= 0 ? m.aSongs[m.aPick] : '', bKey: m.bPick >= 0 ? m.bSongs[m.bPick] : '',
       }).map((f) => ({ ...f, s: ch(f.key) })),
       aBan: m.aBan, aPick: m.aPick, bBan: m.bBan, bPick: m.bPick,
+      ...resultView(m),
     })),
   };
+}
+// 結果発表の画像用：対戦曲ごとの両者のリザルト（承認済みだけ数える）と合計
+function resultView(m) {
+  const metric = METRIC[m.div] || 'ach';
+  const ch = (k) => (k && charts?.byKey.get(k)) || null;
+  const rows = matchFinals(m).map((f, slot) => ({ s: ch(f.key), label: f.label, a: resultOf(m.id, m.a, slot, true), b: resultOf(m.id, m.b, slot, true) }));
+  return { metric, rows, score: resultScore(metric, rows) };
+}
+function matchFinals(m) {
+  return finalSongs({
+    format: settings.format, kadai: m.kadai, kadai2: m.kadai2, aName: nameOf(m.a, 'プレイヤーA'), bName: nameOf(m.b, 'プレイヤーB'),
+    aKey: m.aPick >= 0 ? m.aSongs[m.aPick] : '', bKey: m.bPick >= 0 ? m.bSongs[m.bPick] : '',
+  });
+}
+function resultOf(mid, eid, slot, approvedOnly) {
+  const r = results.find((x) => x.match_id === mid && x.entry_id === eid && x.slot === slot) || null;
+  return r && (!approvedOnly || r.status === 'approved') ? r : null;
 }
 // いま表示する画像の一覧：[{ div, idx }]
 function imgTargets() {
@@ -603,7 +623,7 @@ $('#kindTabs').addEventListener('click', (e) => {
 });
 $('#imgMatch').onchange = (e) => { imgSel = e.target.value; renderImage(); };
 
-const KIND_NAME = { pair: '組み合わせ', reveal: '選曲公開', ban: 'BAN結果', final: '対戦曲' };
+const KIND_NAME = { pair: '組み合わせ', reveal: '選曲公開', ban: 'BAN結果', final: '対戦曲', result: '結果発表' };
 const safe = (s) => String(s || '').replace(/[\\/:*?"<>|\s]/g, '_');
 const fileName = (div, k, i) => `${safe(settings.title || 'mogucup')}_${safe(divName(div))}_${KIND_NAME[k]}${k === 'pair' ? '' : '_M' + String(i + 1).padStart(2, '0')}.png`;
 async function download(div, k, i) {
@@ -624,3 +644,89 @@ $('#dlOne').onclick = async () => {
 };
 
 if (KEY) start(false);
+
+// ---------- リザルトの確認・承認 ----------
+const R_STATUS = { pending: ['承認待ち', 'st-pending'], approved: ['承認済み', 'st-ok'], rejected: ['却下', 'st-ng'] };
+let resultDiv = 'all', resultOnlyPending = false;
+function renderResults() {
+  const pane = $('#resultList'); if (!pane) return;
+  const pend = results.filter((r) => r.status === 'pending').length;
+  $('#resultTab').textContent = pend ? `リザルト（承認待ち ${pend}）` : 'リザルト';
+  $('#resultDiv').innerHTML = [['all', 'すべての部門'], ...DIVISIONS.map((d) => [d.id, d.name])].map(([v, t]) => `<option value="${v}"${v === resultDiv ? ' selected' : ''}>${t}</option>`).join('');
+  const list = matches.filter((m) => resultDiv === 'all' || m.div === resultDiv);
+  pane.replaceChildren();
+  if (!list.length) { pane.innerHTML = '<p class="note">対戦カードがありません</p>'; return; }
+  for (const m of list) {
+    const fs = matchFinals(m);
+    const metric = METRIC[m.div] || 'ach';
+    const view = resultView(m);
+    const hasPending = fs.some((_, k) => [m.a, m.b].some((e) => resultOf(m.id, e, k)?.status === 'pending'));
+    if (resultOnlyPending && !hasPending) continue;
+    const box = document.createElement('div'); box.className = 'match';
+    const no = divMatches(m.div).indexOf(m) + 1;
+    const sc = view.score;
+    const tot = (side) => (sc[side].done ? scoreText(metric, sc[side].total) : '集計中');
+    const win = sc.winner === 'a' ? nameOf(m.a, 'A') + ' の勝ち' : sc.winner === 'b' ? nameOf(m.b, 'B') + ' の勝ち' : sc.winner === 'draw' ? '引き分け' : '未確定';
+    box.innerHTML = `<header><span>${divPill(m.div)} <b>MATCH ${String(no).padStart(2, '0')}</b>　${esc(nameOf(m.a, 'A'))}（${tot('a')}） vs ${esc(nameOf(m.b, 'B'))}（${tot('b')}）</span><span class="note">${metric === 'dx' ? 'でらっくスコアの失点の合計が少ない方の勝ち' : '達成率の合計が高い方の勝ち'}　<b>${win}</b></span></header>`;
+    const tbl = document.createElement('div'); tbl.className = 'rgrid';
+    fs.forEach((f, slot) => {
+      const c = charts?.byKey.get(f.key);
+      const head = document.createElement('div'); head.className = 'rsong';
+      head.innerHTML = `<div class="note">${esc(f.label)}</div><div><b>${esc(c ? c.name : f.key || '（未定）')}</b>${c ? ` <span class="note">${esc(DIFF_SHORT[c.diff] || c.diff)} ${c.kind} ${fmtConst(c.c)}</span>` : ''}</div>`;
+      tbl.append(head, resultCell(m, m.a, slot, f, metric), resultCell(m, m.b, slot, f, metric));
+    });
+    box.append(tbl);
+    pane.append(box);
+  }
+  if (!pane.childElementCount) pane.innerHTML = '<p class="note">承認待ちのリザルトはありません</p>';
+}
+function resultCell(m, eid, slot, f, metric) {
+  const cell = document.createElement('div'); cell.className = 'rcell';
+  if (eid == null) { cell.innerHTML = '<span class="note">（相手未定）</span>'; return cell; }
+  const r = resultOf(m.id, eid, slot);
+  const st = r ? R_STATUS[r.status] || R_STATUS.pending : ['未提出', 'st-none'];
+  cell.innerHTML = `<div class="rhead"><b>${esc(nameOf(eid, ''))}</b> <span class="rstatus ${st[1]}">${st[0]}</span>${r?.reviewer ? ` <span class="note">${esc(r.reviewer)}</span>` : ''}</div>`;
+  const inputs = document.createElement('div'); inputs.className = 'rinputs';
+  const inp = (ph, v, w) => { const i = document.createElement('input'); i.type = 'text'; i.inputMode = 'decimal'; i.placeholder = ph; i.value = v ?? ''; i.style.width = w; return i; };
+  const iDx = inp('DXスコア', r?.dx, '7em'), iMax = inp('MAX', r?.dx_max, '6em'), iAch = inp('達成率', r?.ach != null ? (r.ach / 10000).toFixed(4) : '', '8em');
+  if (metric === 'dx') inputs.append(iDx, document.createTextNode(' / '), iMax); else inputs.append(iAch, document.createTextNode(' %'));
+  if (metric === 'dx' && r?.dx != null) inputs.append(Object.assign(document.createElement('span'), { className: 'note', textContent: `　失点 ${fmtNum(r.dx_max - r.dx)}` }));
+  cell.append(inputs);
+  if (r?.status === 'rejected' && r.reason) cell.append(Object.assign(document.createElement('div'), { className: 'warn', textContent: '理由：' + r.reason }));
+  const reason = inp('却下の理由（任意）', '', '100%'); reason.inputMode = 'text'; reason.hidden = true;
+  const btns = document.createElement('div'); btns.className = 'btns';
+  const mk = (t, cls, fn) => { const b = document.createElement('button'); b.type = 'button'; b.textContent = t; if (cls) b.className = cls; b.onclick = fn; btns.append(b); return b; };
+  const vals = () => (metric === 'dx' ? { dx: iDx.value, dx_max: iMax.value } : { ach: iAch.value });
+  const send = async (item, done) => {
+    try {
+      await api('api/admin/results', { method: 'PUT', key: KEY, body: { items: [{ match_id: m.id, entry_id: eid, slot, song_key: f.key, ...item }] } });
+      const st2 = await api('api/admin/state', { key: KEY });
+      results = st2.results || [];
+      renderResults(); if (tab === 'images') renderImage();
+      setMsg(done, 'ok');
+    } catch (e) { setMsg(e.message, 'err'); }
+  };
+  const imgBox = document.createElement('div'); imgBox.className = 'rimg';
+  if (r?.img) mk('画像を見る', '', async (e) => {
+    if (imgBox.childElementCount) { imgBox.replaceChildren(); e.target.textContent = '画像を見る'; return; }
+    try {
+      const { image } = await api(`api/admin/result-image?match_id=${encodeURIComponent(m.id)}&entry_id=${eid}&slot=${slot}`, { key: KEY });
+      const im = document.createElement('img'); im.src = image; im.alt = 'リザルト画像'; imgBox.append(im); e.target.textContent = '画像を閉じる';
+    } catch (err) { setMsg(err.message, 'err'); }
+  });
+  mk(r ? '値を直して承認' : '値を入れて承認', 'primary', () => send({ ...vals(), status: 'approved' }, '承認しました'));
+  if (r) {
+    mk('却下', 'danger', () => {
+      if (reason.hidden) { reason.hidden = false; reason.focus(); setMsg('理由を入れて（空欄でも可）、もう一度「却下」を押してください', 'ok'); return; }
+      send({ status: 'rejected', reason: reason.value.trim() }, '却下しました');
+    });
+    mk('削除', 'ghost', (e) => confirmTwice(e.target, '本当に削除', () => send({ remove: true }, '削除しました')));
+  }
+  cell.append(reason, btns, imgBox);
+  return cell;
+}
+$('#resultDiv')?.addEventListener('change', (e) => { resultDiv = e.target.value; renderResults(); });
+$('#resultPending')?.addEventListener('change', (e) => { resultOnlyPending = e.target.checked; renderResults(); });
+$('#resultReload')?.addEventListener('click', async () => {
+  try { const st = await api('api/admin/state', { key: KEY }); results = st.results || []; renderResults(); setMsg('リザルトを読み込み直しました', 'ok'); } catch (e) { setMsg(e.message, 'err'); }
+});
