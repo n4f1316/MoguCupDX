@@ -380,5 +380,5 @@ const MoguOCR = (() => {
     }
     return v;
   }
-  return { read, setEngine: (fn) => { engine = fn; }, parseScore, similarity, findAchRows };
+  return { read, setEngine: (fn) => { engine = fn; }, getEngine: () => engine, parseScore, similarity, findAchRows };
 })();
