@@ -60,13 +60,15 @@ details{font-size:13px}
   <div id="cases" style="display:grid;gap:12px"></div>
 </main>
 
-<script src="config.js?v=20261111b"></script>
-<script src="common.js?v=20261111b"></script>
-<script src="ocr.js?v=20261111b"></script>
+<script src="config.js?v=20261111c"></script>
+<script src="common.js?v=20261111c"></script>
+<script src="ocr.js?v=20261111c"></script>
 <script>
 // 曲名の候補（入力の補助）
+let NAMES = [];
 loadCharts().then((c) => {
   const names = [...new Set(c.list.map((x) => x.name))].sort();
+  NAMES = names;
   document.getElementById('songs').innerHTML = names.map((n) => `<option value="${esc(n)}">`).join('');
 }).catch(() => {});
 
@@ -120,7 +122,7 @@ async function run() {
       const { cv, url } = await toCanvas(job.file);
       box.querySelector('img.src').src = url;
       const t0 = performance.now();
-      const v = await MoguOCR.read(cv, { metric: job.metric, target: job.target });
+      const v = await MoguOCR.read(cv, { metric: job.metric, target: job.target, names: NAMES });
       const sec = ((performance.now() - t0) / 1000).toFixed(1);
       render(box.querySelector('.body'), job, v, sec, steps, cv);
     } catch (e) {
@@ -148,7 +150,7 @@ function render(body, job, v, sec, steps, cv) {
       <dt>失点</dt><dd>${loss == null ? '<span class="na">—</span>' : '-' + loss}</dd><dd></dd>
     </dl>
     ${v.note ? `<p class="note">${esc(v.note)}</p>` : ''}
-    ${v.choices ? `<p class="note" style="margin-bottom:4px">読み取った TRACK：</p><div class="chips">${v.choices.map((c) => `<span class="chip2${c.track === v.picked ? ' on' : ''}">TRACK ${c.track}：${esc(c.title || '（曲名読めず）')}　${c.ach}%${c.dx != null ? '・DX ' + c.dx : ''}（似ている度合い ${c.sim.toFixed(2)}）</span>`).join('')}</div>` : ''}
+    ${v.choices ? `<p class="note" style="margin-bottom:4px">読み取った TRACK：</p><div class="chips">${v.choices.map((c) => `<span class="chip2${c.track === v.picked ? ' on' : ''}">TRACK ${c.track}：読んだ曲名「${esc(c.title || '読めず')}」→ 近い曲「${esc(c.guess || 'なし')}」（${(c.guessScore || 0).toFixed(2)}）　${c.ach}%${c.dx != null ? '・DX ' + c.dx : ''}${job.target ? `　探す曲との近さ ${c.sim.toFixed(2)}` : ''}</span>`).join('')}</div>${job.target ? '' : '<p class="note">探す曲名を入れると、その曲の TRACK を選びます。</p>'}` : ''}
     ${job.debug ? `<details><summary>途中の画像（${steps.length}）</summary><div class="steps">${steps.map((s) => `<figure><img src="${s.img}" alt=""><figcaption>${esc(s.label)}</figcaption></figure>`).join('')}</div></details>` : ''}`;
   // 正解を入れると、合っているかを表示
   body.querySelectorAll('input[data-k]').forEach((inp) => {

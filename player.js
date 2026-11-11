@@ -519,7 +519,7 @@ function buildResultForm(form, m, f, metric) {
       image = dataURL; prev.src = dataURL; prev.hidden = false;
       send.disabled = false;
       ocrNote.textContent = '画像から値を読み取っています…（初回は少し時間がかかります）';
-      const v = await MoguOCR.read(canvas, { metric, target: charts?.byKey.get(f.key)?.name || String(f.key).split('|')[0] });
+      const v = await MoguOCR.read(canvas, { metric, target: charts?.byKey.get(f.key)?.name || String(f.key).split('|')[0], names: charts ? [...new Set(charts.list.map((x) => x.name))] : [] });
       const fill = (x) => {
         if (metric === 'dx') { if (x.dx != null) iDx.value = x.dx; if (x.dxMax != null) iMax.value = x.dxMax; if (x.brk != null) iBrk.value = x.brk; }
         else if (x.ach != null) iAch.value = x.ach;

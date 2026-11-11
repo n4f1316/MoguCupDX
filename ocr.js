@@ -122,7 +122,7 @@ const MoguOCR = (() => {
     let ach = null;
     for (const mm of t.matchAll(/(\d{1,3})[.,](\d{4})/g)) {
       const v = Number(`${mm[1]}.${mm[2]}`);
-      if (v <= 101 && (ach === null || v > Number(ach))) ach = `${mm[1]}.${mm[2]}`;
+      if (v >= 50 && v <= 101 && (ach === null || v > Number(ach))) ach = `${mm[1]}.${mm[2]}`; // 0.0000%（自己ベストなし）などは除く
     }
     // 小数点が読めなかったとき（1007817% など）は、% の前の数字の並びから戻す
     if (ach === null) {
@@ -281,12 +281,20 @@ const MoguOCR = (() => {
   function similarity(a, b) {
     a = norm(a); b = norm(b);
     if (!a || !b) return 0;
-    if (a.includes(b) || b.includes(a)) return 1;
+    // 片方がもう片方に含まれるとき（短すぎるものは偶然含まれやすいので、長さの比で下げる）
+    if (Math.min(a.length, b.length) >= 3 && (a.includes(b) || b.includes(a))) return 0.6 + 0.4 * Math.min(a.length, b.length) / Math.max(a.length, b.length);
     const grams = (s) => { const m = new Map(); for (let i = 0; i < s.length - 1; i++) { const g = s.slice(i, i + 2); m.set(g, (m.get(g) || 0) + 1); } return m; };
     const ga = grams(a), gb = grams(b);
     let hit = 0;
     for (const [g, c] of ga) hit += Math.min(c, gb.get(g) || 0);
     return (2 * hit) / Math.max(1, a.length - 1 + b.length - 1);
+  }
+  // 曲名の一覧（opt.names）の中で、読んだ文字に一番近い曲
+  function bestName(text, names) {
+    let best = { name: '', score: 0 };
+    if (!names || norm(text).length < 2) return best;
+    for (const n of names) { const sc = similarity(text, n); if (sc > best.score) best = { name: n, score: sc }; }
+    return best;
   }
   function cropCanvas(img, x0, y0, x1, y1, scale = 1) {
     x0 = Math.max(0, Math.round(x0)); y0 = Math.max(0, Math.round(y0)); x1 = Math.min(img.width, Math.round(x1)); y1 = Math.min(img.height, Math.round(y1));
@@ -308,25 +316,35 @@ const MoguOCR = (() => {
       // 曲名は達成率の上の帯、でらっくスコアは達成率の右下
       // 曲名は紺の帯に白い文字なので、白い部分だけを黒い文字にして読む
       const tx0 = Math.max(0, Math.round(x0 - h * 0.1)), ty0 = Math.max(0, Math.round(y0 - h * 0.82)), tx1 = Math.min(W, Math.round(x1 + (x1 - x0) * 0.33)), ty1 = Math.round(y0 - h * 0.38);
-      let title = '', sim = 0;
+      let title = '', sim = 0, guess = { name: '', score: 0 };
       // 文字の大きさで読み取りの結果が変わるので、曲名の文字の高さがおよそ 50px・35px になる2通りで読む
       for (const [t, sc] of [[140, 200 / h], [160, 200 / h], [140, 140 / h], [160, 140 / h]]) {
         const cv = maskCanvas(img, tx0, ty0, tx1, ty1, (r, g, b) => 0.299 * r + 0.587 * g + 0.114 * b > t && Math.max(r, g, b) - Math.min(r, g, b) < 110, sc, 16);
         const tt = (await engine(cv, 7, '', 'jpn+eng')).replace(/Re:MASTER|MASTER|EXPERT|ADVANCED|BASIC|TRACK\s*\d*/gi, '').trim();
         const sm = similarity(tt, opt.target);
+        const gs = bestName(tt, opt.names);
         if (sm > sim || !title) { title = tt; sim = sm; }
-        if (sim >= 0.8) break;
+        if (gs.score > guess.score) guess = { ...gs, text: tt };
+        if (sim >= 0.8 || guess.score >= 0.8) break;
       }
       // 「でらっくスコア」の文字を避けて、右側の数字だけを読む
       const dxText = await engine(adaptiveMask(img, Math.round(x1 + (x1 - x0) * 0.27), Math.round(y1 - h * 0.45), Math.round(Math.min(W, x1 + (x1 - x0) * 0.5)), Math.round(Math.min(img.height, y1 + h * 0.15)), 15, 2), 7, '0123456789');
       const dxm = dxText.replace(/\D+/g, ' ').trim().split(' ').filter((s) => s.length >= 3 && s.length <= 5).pop();
-      list.push({ ach, dx: dxm ? Number(dxm) : null, title, sim });
+      // 短い読み取り（3〜4文字）は偶然ほかの曲名に似やすいので、確かさを下げる
+      const conf = norm(guess.text || '').length >= 5 ? guess.score : guess.score * 0.5;
+      list.push({ ach, dx: dxm ? Number(dxm) : null, title, sim, guess: guess.name, guessScore: conf });
     }
     if (!list.length) return { note: '大会リザルトから達成率を読み取れませんでした。' };
     const choices = list.map((x, i) => ({ ...x, track: i + 1 }));
-    let cand = list.filter((x) => x.sim >= 0.45);
+    // 対象の曲：読んだ曲名が似ているもの、または曲名の一覧で一番近い曲が対象の曲になったもの
+    const same = (n) => norm(n) === norm(opt.target);
+    let cand = list.filter((x) => x.sim >= 0.45 || (same(x.guess) && x.guessScore >= 0.4));
+    let guessed = false;
     if (!cand.length) {
+      // ほかの TRACK がすべて別の曲だと分かり、曲名を読めなかった TRACK が1つだけなら、それを選ぶ
+      const unknown = list.filter((x) => !(x.guessScore >= 0.6 && !same(x.guess)));
       if (list.length === 1) cand = list;
+      else if (unknown.length === 1) { cand = unknown; guessed = true; }
       else return { choices, note: `大会リザルトの中に「${opt.target}」を見つけられませんでした（曲名を読み取れなかった可能性があります）。下から、この曲の TRACK を選んでください。` };
     }
     // 同じ曲が複数あるときは、スコアの高い方（れもん：達成率、らいむ：でらっくスコア）
@@ -334,7 +352,7 @@ const MoguOCR = (() => {
     const best = cand.sort((a, b) => key(b) - key(a))[0];
     return {
       ach: best.ach, dx: best.dx, dxMax: null, brk: null, choices, picked: choices.find((c) => c.ach === best.ach && c.title === best.title)?.track,
-      note: `大会リザルトから「${opt.target}」を${cand.length > 1 ? `${cand.length}件見つけ、スコアの高い方を` : ''}読み取りました。${opt.metric === 'dx' ? 'でらっくスコアの MAX と BREAK の数は大会リザルトに出ないので、入力してください。' : ''}`,
+      note: guessed ? `曲名を読み取れなかった TRACK を「${opt.target}」として選びました（ほかの TRACK は別の曲でした）。違っていたら下から選び直してください。` : `大会リザルトから「${opt.target}」を${cand.length > 1 ? `${cand.length}件見つけ、スコアの高い方を` : ''}読み取りました。${opt.metric === 'dx' ? 'でらっくスコアの MAX と BREAK の数は大会リザルトに出ないので、入力してください。' : ''}`,
     };
   }
 
@@ -368,7 +386,8 @@ const MoguOCR = (() => {
     v.brk = null;
     try { v.brk = await readBreak(src, W, H, ocr); } catch { /* 読めなければ手入力 */ }
     // ゲーム機の写真：立体数字の達成率、周りより暗い小さな文字（でらっくスコア・判定表）
-    if (rows.length === 1 && v.ach == null) v.ach = await readAchRow(src, rows[0]);
+    // 立体数字の達成率が1つだけある（ゲーム機のリザルト画面）ときは、それを優先する
+    if (rows.length === 1) { const a = await readAchRow(src, rows[0]); if (a != null) v.ach = a; }
     if (v.dx == null || v.brk == null) {
       const am = adaptiveMask(src, 0, 0, W, H, 15);
       for (const psm of [3, 11]) {
