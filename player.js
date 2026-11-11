@@ -470,6 +470,7 @@ function renderPlay(box, m) {
   facts.innerHTML = `<dt>提出の締切</dt><dd>${dl ? esc(fmtDeadline(dl)) : '運営が締め切るまで'}${closed ? '　<b>（終了しました）</b>' : ''}</dd>`;
   box.append(facts);
   if (closed) box.append(el('p', 'warn', 'リザルトの提出期間は終了しました。提出されていない曲は「未提出」として扱われます。'));
+  if (!closed) box.append(bulkForm(m, metric));
   for (const f of myFinals(m)) {
     const r = (m.myResults || []).find((x) => x.slot === f.slot) || null;
     const card = el('div', 'rcard');
@@ -488,6 +489,76 @@ function renderPlay(box, m) {
     card.append(w, form);
     box.append(card);
   }
+}
+
+// 大会リザルト1枚で、複数の対戦曲をまとめて提出する
+function bulkForm(m, metric) {
+  const wrap = el('details', 'rcard bulk');
+  wrap.append(el('summary', '', '大会リザルト1枚で、複数の曲をまとめて提出する'));
+  const body = el('div', 'rform');
+  wrap.append(body);
+  const finals = myFinals(m).filter((f) => f.key && f.slot >= 0);
+  const name = (f) => charts?.byKey.get(f.key)?.name || String(f.key).split('|')[0];
+  body.append(el('p', 'note', 'ゲーム機の「大会リザルト」の写真から、対戦曲それぞれの TRACK を曲名で探して値を入れます。値を確かめ、提出する曲にチェックを入れてから提出してください（同じ画像が各曲のリザルトとして送られます）。'));
+  const file = el('input'); file.type = 'file'; file.accept = 'image/*';
+  const pick = el('label', 'filebtn'); pick.append(el('span', '', '大会リザルトの画像を選ぶ'), file);
+  const prev = el('img', 'rprev'); prev.alt = '選んだ画像'; prev.hidden = true;
+  const note = el('p', 'note', '');
+  const table = el('div', 'bulkrows');
+  const send = el('button', 'primary', 'チェックした曲を提出'); send.type = 'button'; send.disabled = true;
+  const btns = el('div', 'btns'); btns.append(send);
+  body.append(pick, prev, note, table, btns);
+  let image = '', rowsUI = [];
+  file.onchange = async () => {
+    const fl = file.files?.[0]; if (!fl) return;
+    send.disabled = true; table.replaceChildren(); rowsUI = [];
+    try {
+      const { dataURL, canvas } = await compressImage(fl);
+      image = dataURL; prev.src = dataURL; prev.hidden = false;
+      note.textContent = '画像から値を読み取っています…（曲名を読むので、初回は少し時間がかかります）';
+      const res = await MoguOCR.readMulti(canvas, { metric, targets: finals.map(name), names: charts ? [...new Set(charts.list.map((x) => x.name))] : [] });
+      note.textContent = res.tournament
+        ? `${res.tracks.length} 曲ぶんの TRACK を読み取りました。曲ごとに値を確かめてください。${metric === 'dx' ? 'MAX と BREAK の数は大会リザルトに出ないので入力してください。' : ''}`
+        : 'この画像は大会リザルトではないようです。1曲ずつの「リザルトを提出」から出してください。';
+      if (!res.tournament) return;
+      finals.forEach((f, i) => {
+        const r = res.results[i];
+        const row = el('div', 'bulkrow');
+        const chk = el('input'); chk.type = 'checkbox'; chk.checked = r.ach != null;
+        const head = el('label', 'bulkhead'); head.append(chk, el('span', '', `${f.label}：${name(f)}`));
+        const sel = el('select');
+        sel.innerHTML = `<option value="">TRACK を選ぶ</option>` + res.tracks.map((t) => `<option value="${t.track}"${t.track === r.picked ? ' selected' : ''}>TRACK ${t.track}：${esc(((t.guessScore >= 0.6 ? t.guess : t.title) || '曲名読めず').slice(0, 20))}　${t.ach}%${t.dx != null ? '・DX ' + t.dx : ''}</option>`).join('');
+        const inp = (ph, v) => { const x = el('input'); x.type = 'text'; x.inputMode = 'decimal'; x.placeholder = ph; x.value = v ?? ''; return x; };
+        const iAch = inp('達成率', r.ach), iDx = inp('DXスコア', r.dx), iMax = inp('MAX', ''), iBrk = inp('CP以外のBREAK', '');
+        const vals = el('div', 'rinputs');
+        if (metric === 'dx') vals.append(iDx, document.createTextNode(' / '), iMax, document.createTextNode('　BREAK '), iBrk); else vals.append(iAch, document.createTextNode(' %'));
+        sel.onchange = () => {
+          const t = res.tracks.find((x) => String(x.track) === sel.value);
+          if (t) { iAch.value = t.ach; iDx.value = t.dx ?? ''; chk.checked = true; }
+        };
+        row.append(head, sel, vals, el('p', 'note', r.note || ''));
+        table.append(row);
+        rowsUI.push({ f, chk, iAch, iDx, iMax, iBrk });
+      });
+      send.disabled = false;
+    } catch (e) { note.textContent = image ? '値を読み取れませんでした。1曲ずつ提出してください。' : e.message; }
+  };
+  send.onclick = async () => {
+    const todo = rowsUI.filter((x) => x.chk.checked);
+    if (!todo.length) { setMsg('提出する曲にチェックを入れてください', 'err'); return; }
+    send.disabled = true;
+    try {
+      for (const x of todo) {
+        const body = { matchId: m.id, slot: x.f.slot, image };
+        if (metric === 'dx') Object.assign(body, { dx: x.iDx.value, dxMax: x.iMax.value, brk: x.iBrk.value }); else body.ach = x.iAch.value;
+        try { await api('api/me/result', { method: 'POST', key: token, body }); }
+        catch (e) { throw new Error(`${x.f.label}：${e.message}`); }
+      }
+      setMsg(`${todo.length} 曲のリザルトを提出しました。運営の承認をお待ちください`, 'ok');
+      await refresh();
+    } catch (e) { setMsg(e.message, 'err'); send.disabled = false; }
+  };
+  return wrap;
 }
 
 function buildResultForm(form, m, f, metric) {

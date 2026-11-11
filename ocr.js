@@ -306,8 +306,8 @@ const MoguOCR = (() => {
     return cv;
   }
 
-  // 大会リザルト：曲ごとの行（曲名・達成率・でらっくスコア）を読み、対象の曲を選ぶ
-  async function readTournament(img, rows, opt) {
+  // 大会リザルト：曲ごとの行（曲名・達成率・でらっくスコア）を読む
+  async function readTournamentRows(img, rows, opt) {
     const W = img.width, list = [];
     for (const box of rows) {
       const [x0, y0, x1, y1] = box, h = y1 - y0;
@@ -321,7 +321,7 @@ const MoguOCR = (() => {
       for (const [t, sc] of [[140, 200 / h], [160, 200 / h], [140, 140 / h], [160, 140 / h]]) {
         const cv = maskCanvas(img, tx0, ty0, tx1, ty1, (r, g, b) => 0.299 * r + 0.587 * g + 0.114 * b > t && Math.max(r, g, b) - Math.min(r, g, b) < 110, sc, 16);
         const tt = (await engine(cv, 7, '', 'jpn+eng')).replace(/Re:MASTER|MASTER|EXPERT|ADVANCED|BASIC|TRACK\s*\d*/gi, '').trim();
-        const sm = similarity(tt, opt.target);
+        const sm = Math.max(0, ...(opt.targets || [opt.target]).map((x) => similarity(tt, x)));
         const gs = bestName(tt, opt.names);
         if (sm > sim || !title) { title = tt; sim = sm; }
         if (gs.score > guess.score) guess = { ...gs, text: tt };
@@ -334,26 +334,35 @@ const MoguOCR = (() => {
       const conf = norm(guess.text || '').length >= 5 ? guess.score : guess.score * 0.5;
       list.push({ ach, dx: dxm ? Number(dxm) : null, title, sim, guess: guess.name, guessScore: conf });
     }
+    return list.map((x, i) => ({ ...x, track: i + 1 }));
+  }
+  // 読んだ行の中から、対象の曲を選ぶ（同じ曲が複数あればスコアの高い方）。others：ほかに探している曲（消去法で使う）
+  function pickTrack(list, target, metric, others = [], allowGuess = true) {
     if (!list.length) return { note: '大会リザルトから達成率を読み取れませんでした。' };
-    const choices = list.map((x, i) => ({ ...x, track: i + 1 }));
+    const same = (a, b) => norm(a) === norm(b);
+    const sim = (x) => similarity(x.title, target);
     // 対象の曲：読んだ曲名が似ているもの、または曲名の一覧で一番近い曲が対象の曲になったもの
-    const same = (n) => norm(n) === norm(opt.target);
-    let cand = list.filter((x) => x.sim >= 0.45 || (same(x.guess) && x.guessScore >= 0.4));
+    let cand = list.filter((x) => sim(x) >= 0.45 || (same(x.guess, target) && x.guessScore >= 0.4));
     let guessed = false;
     if (!cand.length) {
       // ほかの TRACK がすべて別の曲だと分かり、曲名を読めなかった TRACK が1つだけなら、それを選ぶ
-      const unknown = list.filter((x) => !(x.guessScore >= 0.6 && !same(x.guess)));
+      const known = (x) => (x.guessScore >= 0.6 && !same(x.guess, target)) || others.some((o) => sim2(x, o));
+      const unknown = list.filter((x) => !known(x));
       if (list.length === 1) cand = list;
-      else if (unknown.length === 1) { cand = unknown; guessed = true; }
-      else return { choices, note: `大会リザルトの中に「${opt.target}」を見つけられませんでした（曲名を読み取れなかった可能性があります）。下から、この曲の TRACK を選んでください。` };
+      else if (allowGuess && unknown.length === 1) { cand = unknown; guessed = true; }
+      else return { choices: list, note: `大会リザルトの中に「${target}」を見つけられませんでした（曲名を読み取れなかった可能性があります）。下から、この曲の TRACK を選んでください。` };
     }
-    // 同じ曲が複数あるときは、スコアの高い方（れもん：達成率、らいむ：でらっくスコア）
-    const key = opt.metric === 'dx' ? (x) => x.dx ?? -1 : (x) => Number(x.ach);
-    const best = cand.sort((a, b) => key(b) - key(a))[0];
+    const key = metric === 'dx' ? (x) => x.dx ?? -1 : (x) => Number(x.ach);
+    const best = [...cand].sort((a, b) => key(b) - key(a))[0];
     return {
-      ach: best.ach, dx: best.dx, dxMax: null, brk: null, choices, picked: choices.find((c) => c.ach === best.ach && c.title === best.title)?.track,
-      note: guessed ? `曲名を読み取れなかった TRACK を「${opt.target}」として選びました（ほかの TRACK は別の曲でした）。違っていたら下から選び直してください。` : `大会リザルトから「${opt.target}」を${cand.length > 1 ? `${cand.length}件見つけ、スコアの高い方を` : ''}読み取りました。${opt.metric === 'dx' ? 'でらっくスコアの MAX と BREAK の数は大会リザルトに出ないので、入力してください。' : ''}`,
+      ach: best.ach, dx: best.dx, dxMax: null, brk: null, choices: list, picked: best.track,
+      note: guessed ? `曲名を読み取れなかった TRACK ${best.track} を「${target}」として選びました（ほかの TRACK は別の曲でした）。違っていたら選び直してください。`
+        : `大会リザルトの TRACK ${best.track} から「${target}」を${cand.length > 1 ? `読み取りました（${cand.length}件あったので、スコアの高い方）。` : '読み取りました。'}${metric === 'dx' ? 'でらっくスコアの MAX と BREAK の数は大会リザルトに出ないので、入力してください。' : ''}`,
     };
+  }
+  const sim2 = (x, name) => similarity(x.title, name) >= 0.45 || (norm(x.guess) === norm(name) && x.guessScore >= 0.4);
+  async function readTournament(img, rows, opt) {
+    return pickTrack(await readTournamentRows(img, rows, opt), opt.target, opt.metric);
   }
 
   // 判定表の BREAK の行を、文字として読む（ゲーム機の写真のサブモニターなど）
@@ -399,5 +408,28 @@ const MoguOCR = (() => {
     }
     return v;
   }
-  return { read, setEngine: (fn) => { engine = fn; }, getEngine: () => engine, parseScore, similarity, findAchRows };
+  // 1枚の画像から、複数の曲の値をまとめて読む（大会リザルト向け）。返り値：{ tournament, results: [{ target, ...値 }] }
+  async function readMulti(canvas, opt = {}) {
+    const targets = (opt.targets || []).filter(Boolean);
+    const W = canvas.width, H = canvas.height;
+    const src = canvas.getContext('2d').getImageData(0, 0, W, H);
+    const rows = findAchRows(src);
+    if (rows.length < 2) {
+      // 大会リザルトでなければ、1曲ぶんとして読み、曲名が分からないので最初の曲に当てる
+      const v = await read(canvas, { ...opt, target: targets[0] });
+      return { tournament: false, results: targets.map((t, i) => (i === 0 ? { target: t, ...v } : { target: t, note: 'この画像は1曲ぶんのリザルトです。' })) };
+    }
+    const list = await readTournamentRows(src, rows, { ...opt, targets });
+    // まず曲名で見つかったものを決め、見つからない曲が1つ・どの曲でもない TRACK が1つだけなら、それどうしを組にする
+    const results = targets.map((t) => ({ target: t, ...pickTrack(list, t, opt.metric, targets.filter((o) => o !== t), false) }));
+    const missing = results.filter((r) => r.picked == null);
+    const claimed = new Set(results.map((r) => r.picked).filter((x) => x != null));
+    const free = list.filter((x) => !claimed.has(x.track) && !(x.guessScore >= 0.6 && !targets.some((t) => norm(t) === norm(x.guess))));
+    if (missing.length === 1 && free.length === 1) {
+      const r = missing[0], x = free[0];
+      Object.assign(r, { ach: x.ach, dx: x.dx, dxMax: null, brk: null, picked: x.track, note: `曲名を読み取れなかった TRACK ${x.track} を「${r.target}」として選びました（ほかの TRACK は別の曲でした）。違っていたら選び直してください。` });
+    }
+    return { tournament: true, tracks: list, results };
+  }
+  return { read, readMulti, setEngine: (fn) => { engine = fn; }, getEngine: () => engine, parseScore, similarity, findAchRows };
 })();
