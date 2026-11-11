@@ -60,9 +60,9 @@ details{font-size:13px}
   <div id="cases" style="display:grid;gap:12px"></div>
 </main>
 
-<script src="config.js?v=20261111d"></script>
-<script src="common.js?v=20261111d"></script>
-<script src="ocr.js?v=20261111d"></script>
+<script src="config.js?v=20261111e"></script>
+<script src="common.js?v=20261111e"></script>
+<script src="ocr.js?v=20261111e"></script>
 <script>
 // 曲名の候補（入力の補助）
 let NAMES = [];
@@ -124,6 +124,15 @@ async function run() {
       const t0 = performance.now();
       // 曲名に「,」を含む曲は、曲名の一覧にあればそのまま1曲として扱う
       const list = NAMES.includes(job.target) ? [job.target] : job.target.split(/[,、，]/).map((x) => x.trim()).filter(Boolean);
+      // 曲名を入れないとき：大会リザルトなら、参加者ページの「まとめて提出」と同じく TRACK ごとの達成率だけを読む
+      if (!list.length) {
+        const tr = await MoguOCR.readTracks(cv, { metric: job.metric });
+        if (tr.tournament) {
+          const sec = ((performance.now() - t0) / 1000).toFixed(1);
+          renderMulti(box.querySelector('.body'), job, { tournament: true, tracks: tr.tracks.map((t) => ({ ...t, title: '（読まない）', guess: '', guessScore: 0 })), results: [] }, sec, steps, cv);
+          continue;
+        }
+      }
       if (list.length > 1) {
         const res = await MoguOCR.readMulti(cv, { metric: job.metric, targets: list, names: NAMES });
         const sec = ((performance.now() - t0) / 1000).toFixed(1);
@@ -176,11 +185,12 @@ function render(body, job, v, sec, steps, cv) {
 function renderMulti(body, job, res, sec, steps, cv) {
   body.innerHTML = `
     <div class="chips"><span class="chip2">${res.tournament ? '大会リザルト' : '1曲ぶんの画像'}</span><span class="chip2">${job.metric === 'dx' ? 'らいむ' : 'れもん'}</span><span class="chip2">${sec} 秒・読み取り ${steps.length} 回</span><span class="chip2">${cv.width}×${cv.height}</span></div>
-    <table style="margin-top:8px;border-collapse:collapse;font-size:14px;width:100%">
+    ${res.results.length ? '' : '<p class="note">曲名を入れていないので、TRACK ごとの達成率だけを読みました（参加者ページの「まとめて提出」と同じ読み方です）。</p>'}
+    <table style="margin-top:8px;border-collapse:collapse;font-size:14px;width:100%"${res.results.length ? '' : ' hidden'}>
       <tr><th style="text-align:left">探す曲</th><th>TRACK</th><th>達成率</th><th>でらっくスコア</th><th style="text-align:left">メモ</th></tr>
       ${res.results.map((r) => `<tr style="border-top:1px solid var(--line)"><td>${esc(r.target)}</td><td style="text-align:center">${r.picked ?? '—'}</td><td style="font-family:var(--f-mono)">${r.ach != null ? r.ach + '%' : '<span class="na">読めず</span>'}</td><td style="font-family:var(--f-mono)">${r.dx ?? '<span class="na">—</span>'}</td><td class="note">${esc(r.note || '')}</td></tr>`).join('')}
     </table>
-    ${res.tracks ? `<p class="note" style="margin-bottom:4px">読み取った TRACK：</p><div class="chips">${res.tracks.map((c) => `<span class="chip2">TRACK ${c.track}：読んだ曲名「${esc(c.title || '読めず')}」→ 近い曲「${esc(c.guess || 'なし')}」（${(c.guessScore || 0).toFixed(2)}）　${c.ach}%${c.dx != null ? '・DX ' + c.dx : ''}</span>`).join('')}</div>` : ''}
+    ${res.tracks ? `<p class="note" style="margin-bottom:4px">読み取った TRACK：</p><div class="chips">${res.tracks.map((c) => `<span class="chip2">TRACK ${c.track}：${c.title === '（読まない）' ? '' : `読んだ曲名「${esc(c.title || '読めず')}」→ 近い曲「${esc(c.guess || 'なし')}」（${(c.guessScore || 0).toFixed(2)}）　`}${c.ach}%${c.dx != null ? '・DX ' + c.dx : ''}</span>`).join('')}</div>` : ''}
     ${job.debug ? `<details><summary>途中の画像（${steps.length}）</summary><div class="steps">${steps.map((s) => `<figure><img src="${s.img}" alt=""><figcaption>${esc(s.label)}</figcaption></figure>`).join('')}</div></details>` : ''}`;
 }
 function tally() {

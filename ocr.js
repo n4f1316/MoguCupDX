@@ -318,7 +318,8 @@ const MoguOCR = (() => {
       const tx0 = Math.max(0, Math.round(x0 - h * 0.1)), ty0 = Math.max(0, Math.round(y0 - h * 0.82)), tx1 = Math.min(W, Math.round(x1 + (x1 - x0) * 0.33)), ty1 = Math.round(y0 - h * 0.38);
       let title = '', sim = 0, guess = { name: '', score: 0 };
       // 文字の大きさで読み取りの結果が変わるので、曲名の文字の高さがおよそ 50px・35px になる2通りで読む
-      for (const [t, sc] of [[140, 200 / h], [160, 200 / h], [140, 140 / h], [160, 140 / h]]) {
+      // opt.titles が false のときは曲名を読まない（達成率だけで速く読む）
+      for (const [t, sc] of opt.titles === false ? [] : [[140, 200 / h], [160, 200 / h], [140, 140 / h], [160, 140 / h]]) {
         const cv = maskCanvas(img, tx0, ty0, tx1, ty1, (r, g, b) => 0.299 * r + 0.587 * g + 0.114 * b > t && Math.max(r, g, b) - Math.min(r, g, b) < 110, sc, 16);
         const tt = (await engine(cv, 7, '', 'jpn+eng')).replace(/Re:MASTER|MASTER|EXPERT|ADVANCED|BASIC|TRACK\s*\d*/gi, '').trim();
         const sm = Math.max(0, ...(opt.targets || [opt.target]).map((x) => similarity(tt, x)));
@@ -431,5 +432,14 @@ const MoguOCR = (() => {
     }
     return { tournament: true, tracks: list, results };
   }
-  return { read, readMulti, setEngine: (fn) => { engine = fn; }, getEngine: () => engine, parseScore, similarity, findAchRows };
+  // 大会リザルトの TRACK ごとの達成率・でらっくスコアだけを読む（曲名は読まない）。返り値：{ tournament, tracks: [{ track, ach, dx }] }
+  async function readTracks(canvas, opt = {}) {
+    const W = canvas.width, H = canvas.height;
+    const src = canvas.getContext('2d').getImageData(0, 0, W, H);
+    const rows = findAchRows(src);
+    if (!rows.length) return { tournament: false, tracks: [] };
+    const tracks = (await readTournamentRows(src, rows, { ...opt, titles: false })).map(({ track, ach, dx }) => ({ track, ach, dx }));
+    return { tournament: rows.length >= 2, tracks };
+  }
+  return { read, readMulti, readTracks, setEngine: (fn) => { engine = fn; }, getEngine: () => engine, parseScore, similarity, findAchRows };
 })();
