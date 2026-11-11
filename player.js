@@ -463,7 +463,7 @@ function renderPlay(box, m) {
   box.append(el('p', 'note', metric === 'dx'
     ? 'この部門は、失点の3曲合計が少ない方の勝ちです。失点 ＝（でらっくスコアの MAX − でらっくスコア）＋ CRITICAL PERFECT 以外で取った BREAK の数 × 2。曲ごとにリザルト画像を選ぶと、でらっくスコアを読み取ります。BREAK の数は判定の内訳を見て入力し、値を確かめてから提出してください。'
     : 'この部門は、達成率の3曲合計が高い方の勝ちです。曲ごとにリザルト画像を選ぶと、達成率を読み取ります。値を確かめてから提出してください。'));
-  box.append(el('p', 'note', 'でらっくす NET のプレイ履歴（詳細）のスクリーンショットが一番正確に読み取れます。ゲーム機の画面の写真でも提出できます。期間中は何度でも出し直せます（出し直すと承認待ちに戻ります）。'));
+  box.append(el('p', 'note', '読み取れる画像：でらっくす NET のプレイ履歴（詳細）のスクリーンショット（BREAK まで読めて一番正確）、ゲーム機のリザルト画面の写真、ゲーム機の「大会リザルト」の写真（曲名で対象の曲を探します）。期間中は何度でも出し直せます（出し直すと承認待ちに戻ります）。'));
   const dl = ME.settings.resultDeadline;
   const closed = dl && Date.now() > Date.parse(dl + ':00+09:00');
   const facts = el('dl', 'facts');
@@ -508,7 +508,8 @@ function buildResultForm(form, m, f, metric) {
   if (metric !== 'dx') brkNote.hidden = true;
   const send = el('button', 'primary', 'この内容で提出'); send.type = 'button'; send.disabled = true;
   const btns = el('div', 'btns'); btns.append(send);
-  form.append(pick, prev, ocrNote, row, brkNote, btns);
+  const tracks = el('div', 'btns tracks'); tracks.hidden = true;
+  form.append(pick, prev, ocrNote, tracks, row, brkNote, btns);
   let image = '';
   file.onchange = async () => {
     const fl = file.files?.[0]; if (!fl) return;
@@ -518,13 +519,29 @@ function buildResultForm(form, m, f, metric) {
       image = dataURL; prev.src = dataURL; prev.hidden = false;
       send.disabled = false;
       ocrNote.textContent = '画像から値を読み取っています…（初回は少し時間がかかります）';
-      const v = await readScore(canvas);
-      if (metric === 'dx' && v.dx != null) { iDx.value = v.dx; iMax.value = v.dxMax; }
-      if (metric === 'dx' && v.brk != null) iBrk.value = v.brk;
-      if (metric === 'ach' && v.ach != null) iAch.value = v.ach;
+      const v = await MoguOCR.read(canvas, { metric, target: charts?.byKey.get(f.key)?.name || String(f.key).split('|')[0] });
+      const fill = (x) => {
+        if (metric === 'dx') { if (x.dx != null) iDx.value = x.dx; if (x.dxMax != null) iMax.value = x.dxMax; if (x.brk != null) iBrk.value = x.brk; }
+        else if (x.ach != null) iAch.value = x.ach;
+      };
+      fill(v);
+      // 大会リザルト：読み取った TRACK を並べ、違っていたら選び直せるようにする
+      tracks.replaceChildren(); tracks.hidden = !v.choices?.length;
+      for (const c of v.choices || []) {
+        const b = el('button', c.track === v.picked ? 'primary' : '', `TRACK ${c.track}：${c.title ? c.title.slice(0, 18) + '　' : ''}${c.ach}%${c.dx != null ? `・DX ${c.dx}` : ''}`);
+        b.type = 'button';
+        b.onclick = () => {
+          tracks.querySelectorAll('button').forEach((x) => x.classList.toggle('primary', x === b));
+          if (metric === 'dx') { iDx.value = c.dx ?? ''; } else iAch.value = c.ach;
+          ocrNote.textContent = `TRACK ${c.track} の値を入れました。画像と見比べてから提出してください。${metric === 'dx' ? 'MAX と BREAK の数は大会リザルトに出ないので入力してください。' : ''}`;
+        };
+        tracks.append(b);
+      }
       const got = metric === 'dx' ? v.dx != null : v.ach != null;
-      ocrNote.textContent = got
-        ? `読み取った値を入れました。画像と見比べて、違っていたら直してから提出してください。${metric === 'dx' && v.brk == null ? 'BREAK の数は読み取れなかったので、判定の内訳を見て入力してください。' : ''}`
+      const missing = [];
+      if (metric === 'dx' && v.dx != null) { if (v.dxMax == null) missing.push('でらっくスコアの MAX'); if (v.brk == null) missing.push('BREAK の数'); }
+      ocrNote.textContent = v.note && !got ? v.note
+        : got ? `${v.note ? v.note + ' ' : ''}読み取った値を入れました。画像と見比べて、違っていたら直してから提出してください。${missing.length ? `${missing.join('と')}は読み取れなかったので入力してください。` : ''}`
         : '値を読み取れませんでした。画像を見ながら入力してください。';
     } catch (e) {
       ocrNote.textContent = image ? '値を読み取れませんでした。画像を見ながら入力してください。' : e.message;
@@ -547,7 +564,7 @@ async function compressImage(fileObj) {
   const url = URL.createObjectURL(fileObj);
   try {
     const img = await new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = () => rej(new Error('画像を読み込めませんでした')); i.src = url; });
-    const max = window.MOGU_DEMO ? 720 : 1600;
+    const max = window.MOGU_DEMO ? 720 : 1600; // 送る画像の大きさ
     const k = Math.min(1, max / Math.max(img.naturalWidth, img.naturalHeight));
     const cv = document.createElement('canvas');
     cv.width = Math.round(img.naturalWidth * k); cv.height = Math.round(img.naturalHeight * k);
@@ -555,7 +572,7 @@ async function compressImage(fileObj) {
     let q = window.MOGU_DEMO ? 0.6 : 0.85, dataURL = cv.toDataURL('image/jpeg', q);
     while (dataURL.length > 1400000 && q > 0.4) { q -= 0.1; dataURL = cv.toDataURL('image/jpeg', q); }
     // 読み取りは、縮める前に近い大きさの画像で行う（小さいと数字を読み違えやすい）
-    const k2 = Math.min(1, 2000 / Math.max(img.naturalWidth, img.naturalHeight));
+    const k2 = Math.min(1, 2600 / Math.max(img.naturalWidth, img.naturalHeight));
     let ocrCv = cv;
     if (k2 > k) {
       ocrCv = document.createElement('canvas');
@@ -564,153 +581,6 @@ async function compressImage(fileObj) {
     }
     return { dataURL, canvas: ocrCv };
   } finally { URL.revokeObjectURL(url); }
-}
-
-// 文字の読み取り（Tesseract.js をそのときだけ読み込む。画像はこのブラウザの中で読み、外には送らない）
-let tessReady = null, tessWorker = null;
-function loadTesseract() {
-  if (window.Tesseract) return Promise.resolve(window.Tesseract);
-  tessReady ||= new Promise((res, rej) => {
-    const sc = document.createElement('script');
-    sc.src = 'https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js';
-    sc.onload = () => res(window.Tesseract);
-    sc.onerror = () => { tessReady = null; rej(new Error('読み取りの準備ができませんでした')); };
-    document.head.append(sc);
-  });
-  return tessReady;
-}
-async function readScore(canvas) {
-  const T = await loadTesseract();
-  if (!tessWorker) tessWorker = await T.createWorker('eng');
-  const W = canvas.width, H = canvas.height;
-  const src = canvas.getContext('2d').getImageData(0, 0, W, H);
-  const ocr = async (cv, psm, chars) => {
-    await tessWorker.setParameters({ tessedit_pageseg_mode: String(psm), tessedit_char_whitelist: chars });
-    return (await tessWorker.recognize(cv)).data.text || '';
-  };
-  // 1回目：白黒にして全体を読む（でらっくスコア・達成率）
-  const gray = maskCanvas(src, 0, 0, W, H, (r, g, b) => 0.299 * r + 0.587 * g + 0.114 * b < 150);
-  const v = parseScore(await ocr(gray, 3, '0123456789.,/%'));
-  // 2回目：紫の帯の上の白い大きな数字（達成率）は、白い部分を文字として読み直す
-  if (v.ach == null || v.dx == null) {
-    const white = maskCanvas(src, 0, 0, W, H, (r, g, b) => Math.min(r, g, b) > 215);
-    const v2 = parseScore(await ocr(white, 3, '0123456789.,/%'));
-    if (v.ach == null) v.ach = v2.ach;
-    if (v.dx == null) { v.dx = v2.dx; v.dxMax = v2.dxMax; }
-  }
-  // 3回目：判定の内訳の表から、BREAK の行（PERFECT・GREAT・GOOD・MISS の合計）を読む
-  v.brk = null;
-  try { v.brk = await readBreak(src, W, H, ocr); } catch { /* 読めなければ手入力 */ }
-  return v;
-}
-
-// 指定した範囲を、条件に合う画素を黒・それ以外を白にした canvas にする（scale 倍に拡大）
-function maskCanvas(img, x0, y0, x1, y1, isInk, scale = 1, pad = 0) {
-  const w = x1 - x0, h = y1 - y0;
-  const cv = document.createElement('canvas');
-  cv.width = w * scale + pad * 2; cv.height = h * scale + pad * 2;
-  const c = cv.getContext('2d');
-  c.fillStyle = '#fff'; c.fillRect(0, 0, cv.width, cv.height);
-  const out = c.getImageData(0, 0, cv.width, cv.height), d = img.data, o = out.data;
-  for (let y = 0; y < h * scale; y++) {
-    for (let x = 0; x < w * scale; x++) {
-      const i = ((y0 + Math.floor(y / scale)) * img.width + (x0 + Math.floor(x / scale))) * 4;
-      if (isInk(d[i], d[i + 1], d[i + 2], x0 + Math.floor(x / scale), y0 + Math.floor(y / scale))) {
-        const j = ((y + pad) * cv.width + (x + pad)) * 4;
-        o[j] = o[j + 1] = o[j + 2] = 0;
-      }
-    }
-  }
-  c.putImageData(out, 0, 0);
-  return cv;
-}
-
-// でらっくす NET の判定表（青い枠）を探し、一番下の BREAK の行の数字を1つずつ読む
-async function readBreak(img, W, H, ocr) {
-  const d = img.data;
-  const blue = (i) => d[i] < 130 && d[i + 1] > 110 && d[i + 1] < 200 && d[i + 2] > 200 && d[i + 2] - d[i] > 90;
-  // 横に長い青い線（表の上辺・下辺）を探す
-  const lines = [];
-  for (let y = 0; y < H; y++) {
-    // 画像の圧縮で線がところどころ途切れるので、数画素のすき間はつながっているとみなす
-    let best = 0, bx = 0, s = -1, miss = 0;
-    for (let x = 0; x <= W; x++) {
-      const on = x < W && blue((y * W + x) * 4);
-      if (on) { if (s < 0) s = x; miss = 0; continue; }
-      if (s >= 0 && x < W && ++miss <= 3) continue;
-      if (s >= 0) { const len = x - miss - s; if (len > best) { best = len; bx = s; } s = -1; miss = 0; }
-    }
-    if (best >= 0.35 * W && best <= 0.92 * W) {
-      const last = lines[lines.length - 1];
-      if (last && y - last.y1 <= 2) { last.y1 = y; last.x0 = Math.min(last.x0, bx); last.x1 = Math.max(last.x1, bx + best); }
-      else lines.push({ y0: y, y1: y, x0: bx, x1: bx + best });
-    }
-  }
-  let box = null;
-  for (let i = 0; i < lines.length; i++) {
-    for (let j = i + 1; j < lines.length; j++) {
-      const t = lines[i], b = lines[j], w = t.x1 - t.x0, dy = b.y0 - t.y1;
-      if (Math.abs(t.x0 - b.x0) < 0.03 * W && Math.abs(t.x1 - b.x1) < 0.03 * W && dy > 0.3 * w && dy < 0.8 * w && (!box || dy > box.y1 - box.y0)) {
-        box = { x0: t.x0, y0: t.y1, x1: t.x1, y1: b.y0 };
-      }
-    }
-  }
-  if (!box) return null;
-  // 表は6行（見出し・TAP・HOLD・SLIDE・TOUCH・BREAK）。一番下の行の、左の見出しの列を除いた部分
-  const w = box.x1 - box.x0, h = box.y1 - box.y0;
-  const sx0 = box.x0 + Math.round(w * 0.17), sx1 = box.x1 - 4, sy0 = box.y0 + Math.round(h * 5 / 6) + 3, sy1 = box.y1 - 3;
-  // 背景（白・水色）でないものを文字とする
-  const ink = (r, g, b) => !(Math.min(r, g, b) > 200 && Math.max(r, g, b) - Math.min(r, g, b) < 45) && !(r > 150 && g > 200 && b > 230);
-  const hasInk = [];
-  for (let x = sx0; x < sx1; x++) {
-    let on = false;
-    for (let y = sy0; y < sy1 && !on; y++) { const i = (y * W + x) * 4; on = ink(d[i], d[i + 1], d[i + 2]); }
-    hasInk.push(on);
-  }
-  // 数字のかたまり（すき間で区切る）＝ CRITICAL PERFECT・PERFECT・GREAT・GOOD・MISS の5つ
-  const gap = Math.round(w * 0.03), runs = [];
-  let s = -1, last = -1;
-  hasInk.forEach((on, k) => {
-    if (!on) return;
-    if (s < 0) s = k; else if (k - last > gap) { runs.push([s, last]); s = k; }
-    last = k;
-  });
-  if (s >= 0) runs.push([s, last]);
-  // 罫線のかけらなど、細すぎるものは数字ではないので除く
-  const minW = Math.max(2, Math.round(w * 0.006));
-  const nums5 = runs.filter(([a, b]) => b - a + 1 >= minW);
-  if (nums5.length !== 5) return null;
-  runs.length = 0; runs.push(...nums5);
-  const nums = [];
-  for (const [a, b] of runs) {
-    const cv = maskCanvas(img, sx0 + Math.max(0, a - 3), sy0, Math.min(sx1, sx0 + b + 4), sy1, ink, 3, 30);
-    const t = (await ocr(cv, 7, '0123456789')).replace(/\D/g, '');
-    if (!t) return null;
-    nums.push(Number(t));
-  }
-  return nums[1] + nums[2] + nums[3] + nums[4];
-}
-// 読み取った文字から、達成率（100.5432%）とでらっくスコア（2,345 / 2,502）を探す
-function parseScore(text) {
-  const t = text.replace(/\s+/g, ' ');
-  let ach = null;
-  for (const mm of t.matchAll(/(\d{1,3})[.,](\d{4})/g)) {
-    const v = Number(`${mm[1]}.${mm[2]}`);
-    if (v <= 101 && (ach === null || v > Number(ach))) ach = `${mm[1]}.${mm[2]}`;
-  }
-  // 小数点が読めなかったとき（1007817% など）は、% の前の数字の並びから戻す
-  if (ach === null) {
-    for (const mm of t.matchAll(/(\d{2,3})(\d{4})\s*%/g)) {
-      const v = Number(`${mm[1]}.${mm[2]}`);
-      if (v >= 50 && v <= 101) { ach = `${mm[1]}.${mm[2]}`; break; }
-    }
-  }
-  let dx = null, dxMax = null;
-  for (const mm of t.matchAll(/(\d[\d,.]{0,6})\s*\/\s*(\d[\d,.]{0,6})/g)) {
-    const a = Number(mm[1].replace(/[,.]/g, '')), b = Number(mm[2].replace(/[,.]/g, ''));
-    if (b >= 300 && b <= 12000 && b % 3 === 0 && a <= b) { dx = a; dxMax = b; break; }
-  }
-  return { ach, dx, dxMax };
 }
 
 // ============================================================
