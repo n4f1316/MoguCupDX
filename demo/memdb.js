@@ -58,12 +58,12 @@ export function makeDB(data, onWrite) {
       rows: [...T.entries].sort((a, b) => a.id - b.id).map((e) => ({ ...e, username: byUser(e.user_id)?.username ?? null, source: byUser(e.user_id)?.source ?? null })),
     }),
     'INSERT INTO entries (entry_name, x_id, rating, frate, user_id, answers) VALUES (?, ?, ?, ?, ?, ?)': ([n, x, r, f, uid, a]) => {
-      if (T.entries.some((e) => lc(e.entry_name) === lc(n) || lc(e.x_id) === lc(x) || (uid != null && e.user_id === uid))) throw uniqueErr();
+      if (T.entries.some((e) => lc(e.entry_name) === lc(n) || (x !== '' && lc(e.x_id) === lc(x)) || (uid != null && e.user_id === uid))) throw uniqueErr();
       T.entries.push({ id: ++T.seq.entries, entry_name: n, x_id: x, rating: r, frate: f, memo: '', created_at: now(), user_id: uid, answers: a });
       return { write: true, meta: { last_row_id: T.seq.entries } };
     },
     'UPDATE entries SET entry_name=?, x_id=?, rating=?, frate=?, memo=?, answers=? WHERE id=?': ([n, x, r, f, m, a, id]) => {
-      if (T.entries.some((e) => e.id !== id && (lc(e.entry_name) === lc(n) || lc(e.x_id) === lc(x)))) throw uniqueErr();
+      if (T.entries.some((e) => e.id !== id && (lc(e.entry_name) === lc(n) || (x !== '' && lc(e.x_id) === lc(x))))) throw uniqueErr();
       const e = T.entries.find((y) => y.id === id);
       if (e) Object.assign(e, { entry_name: n, x_id: x, rating: r, frate: f, memo: m, answers: a });
       return { write: true };

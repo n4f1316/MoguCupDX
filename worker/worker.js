@@ -42,7 +42,7 @@ const JACKET_BASES = [
 const CONSTS_URL = 'https://n4f1316.github.io/dxscore-tools/maimai_consts_magical.json';
 const RATE2F_URL = 'https://2frate.want131611.workers.dev/';
 const SESSION_DAYS = 30;
-const WORKER_VERSION = '2026-11-10c'; // 反映を確かめるための版（/api/public に出る）
+const WORKER_VERSION = '2026-11-15b'; // 反映を確かめるための版（/api/public に出る）
 const PHASES = ['closed', 'select', 'ban', 'pick', 'done', 'play', 'result'];
 // 部門ごとの勝敗の決め方
 //   らいむ：失点（MAX − でらっくスコア ＋ CRITICAL PERFECT 以外の BREAK の数×2）の3曲合計が少ない方
@@ -61,6 +61,11 @@ const DEFAULT_SETTINGS = {
   // 部門ごとの、新しく作る対戦カードの既定値（上限・運営課題曲・運営課題曲2）
   divDefaults: { lime: { cap: 13.9, kadai: '', kadai2: '' }, lemon: { cap: 14.9, kadai: '', kadai2: '' } },
   format: 'main',      // main：本編（運営課題曲あり） / mini：mini（運営課題曲なし、自選曲の投げ合いのみ）
+  // 申請の設問：q は用意してある設問ごとの扱い（required：必須 / optional：任意 / hidden：表示しない）、custom は運営が足した設問
+  form: {
+    q: { xId: 'required', discord: 'required', rating: 'required', frate: 'required', plates: 'optional', m5: 'required', r5: 'required', s6: 'required', lv14: 'required', ap14: 'required', ap14p: 'required' },
+    custom: [],
+  },
   notes: {
     pair: '自選曲を3曲選んで提出してください',
     reveal: '相手の自選曲から1曲を選んで、BANを提出してください',
@@ -69,7 +74,7 @@ const DEFAULT_SETTINGS = {
     final: '対戦曲は自選曲・他選曲・運営課題曲の3曲です',
   },
 };
-const PUBLIC_KEYS = ['title', 'round', 'entryOpen', 'entryDeadline', 'notice', 'phase', 'phaseNote', 'format', 'notes', 'resultDeadline'];
+const PUBLIC_KEYS = ['title', 'round', 'entryOpen', 'entryDeadline', 'notice', 'phase', 'phaseNote', 'format', 'notes', 'resultDeadline', 'form'];
 
 export default {
   async fetch(req, env, ctx) {
@@ -261,47 +266,125 @@ async function entry(req, env, user) {
   if (!isOpen(s)) throw err(403, '参加申請の受付は終了しています');
   if (await env.DB.prepare('SELECT 1 FROM entries WHERE user_id=?').bind(user.id).first()) throw err(409, 'このユーザーはすでに申請しています');
   const b = await body(req);
-  const v = validateEntry(b);
-  const answers = validateAnswers(b.answers || {});
+  const v = validateEntry(b, s.form);
+  const answers = validateAnswers(b.answers || {}, s.form);
   const r = await env.DB.prepare('INSERT INTO entries (entry_name, x_id, rating, frate, user_id, answers) VALUES (?, ?, ?, ?, ?, ?)')
     .bind(v.entryName, v.xId, v.rating, v.frate, user.id, JSON.stringify(answers)).run().catch(dup);
   return json({ ok: true, id: r.meta.last_row_id });
 }
 
-function validateEntry(b) {
+// 申請の設問の扱い
+const Q_MODES = ['required', 'optional', 'hidden'];
+const BUILTIN_Q = ['xId', 'discord', 'rating', 'frate', 'plates', 'm5', 'r5', 's6', 'lv14', 'ap14', 'ap14p'];
+const CUSTOM_TYPES = ['text', 'number', 'choice', 'multi'];
+// 運営が送った設問の設定を整える（strict なら間違いをエラーにする）
+function normForm(f, strict = false) {
+  const bad = (msg) => { if (strict) throw err(400, msg); };
+  const q = {};
+  for (const k of BUILTIN_Q) {
+    const v = f?.q?.[k];
+    q[k] = Q_MODES.includes(v) ? v : DEFAULT_SETTINGS.form.q[k];
+  }
+  const custom = [], ids = new Set();
+  for (const c of Array.isArray(f?.custom) ? f.custom.slice(0, 30) : []) {
+    const label = String(c?.label ?? '').trim().slice(0, 120);
+    if (!label) { bad('追加した設問に、空欄の設問文があります'); continue; }
+    const type = CUSTOM_TYPES.includes(c.type) ? c.type : 'text';
+    const options = [...new Set((Array.isArray(c.options) ? c.options : []).map((o) => String(o).trim().slice(0, 60)).filter(Boolean))].slice(0, 30);
+    if ((type === 'choice' || type === 'multi') && !options.length) { bad(`「${label}」の選択肢を入れてください`); continue; }
+    let id = /^c[a-z0-9]{2,16}$/.test(c.id) ? c.id : 'c' + randomHex(4);
+    while (ids.has(id)) id = 'c' + randomHex(4);
+    ids.add(id);
+    custom.push({
+      id, label, type, options: type === 'choice' || type === 'multi' ? options : [],
+      mode: Q_MODES.includes(c.mode) ? c.mode : 'optional',
+      div: DIVISIONS.some((d) => d.id === c.div) ? c.div : '',
+      note: String(c.note ?? '').trim().slice(0, 200),
+    });
+  }
+  return { q, custom };
+}
+const blank = (v) => v === undefined || v === null || String(v).trim() === '';
+
+// 名前・X・レート・2fRATE。form の設定で任意・非表示にした欄は空欄（X は ''、レートと 2fRATE は -1）を受け付ける。
+// admin は運営ページからの編集：名前以外はすべて任意として扱う
+function validateEntry(b, form, admin = false) {
+  const mode = (k) => (admin ? 'optional' : form.q[k]);
   const entryName = String(b.entryName ?? '').trim().replace(/\s+/g, ' ');
-  const xId = String(b.xId ?? '').trim().replace(/^@/, '');
-  const rating = Number(b.rating);
-  const frate = Number(b.frate);
   if (!entryName || [...entryName].length > 20) throw err(400, 'スコアタで使用する名前は1〜20文字で入力してください');
-  if (!/^[A-Za-z0-9_]{1,15}$/.test(xId)) throw err(400, 'X の ID は英数字と _ の15文字以内で入力してください（@ は不要）');
-  if (!Number.isInteger(rating) || rating < 0 || rating > 20000) throw err(400, 'レートは 0〜20000 の整数で入力してください');
-  if (!Number.isFinite(frate) || frate < 0 || frate > 30) throw err(400, '2fRATE は 0〜30 の数値で入力してください');
-  return { entryName, xId, rating, frate: Math.round(frate * 1000) / 1000 };
+  let xId = '';
+  if (mode('xId') !== 'hidden' && !blank(b.xId)) {
+    xId = String(b.xId).trim().replace(/^@/, '');
+    if (!/^[A-Za-z0-9_]{1,15}$/.test(xId)) throw err(400, 'X の ID は英数字と _ の15文字以内で入力してください（@ は不要）');
+  } else if (mode('xId') === 'required') throw err(400, 'X の ID を入力してください');
+  let rating = -1;
+  if (mode('rating') !== 'hidden' && !blank(b.rating)) {
+    rating = Number(b.rating);
+    if (!Number.isInteger(rating) || rating < 0 || rating > 20000) throw err(400, 'レートは 0〜20000 の整数で入力してください');
+  } else if (mode('rating') === 'required') throw err(400, '現在のレートを入力してください');
+  let frate = -1;
+  if (mode('frate') !== 'hidden' && !blank(b.frate)) {
+    frate = Number(b.frate);
+    if (!Number.isFinite(frate) || frate < 0 || frate > 30) throw err(400, '2fRATE は 0〜30 の数値で入力してください');
+    frate = Math.round(frate * 1000) / 1000;
+  } else if (mode('frate') === 'required') throw err(400, '2fRATE を入力してください');
+  return { entryName, xId, rating, frate };
 }
 
 // 申請の設問（Q2・Q4・Q6〜Q12）
-function validateAnswers(a) {
+function validateAnswers(a, form) {
+  const q = form.q;
+  const out = {};
   const discord = String(a.discord ?? '').trim();
-  if (!discord || [...discord].length > 40) throw err(400, 'Discord で使用している名前を40文字以内で入力してください');
+  if (q.discord !== 'hidden' && discord) {
+    if ([...discord].length > 40) throw err(400, 'Discord で使用している名前は40文字以内で入力してください');
+    out.discord = discord;
+  } else if (q.discord === 'required') throw err(400, 'Discord で使用している名前を入力してください');
+  else out.discord = '';
   const divisions = DIVISIONS.map((d) => d.id).filter((id) => (a.divisions || []).includes(id));
   if (!divisions.length) throw err(400, '参加したい部門を1つ以上選んでください');
-  const plates = PLATES.filter((p) => (a.plates || []).includes(p));
-  const count = (v, label) => {
+  out.divisions = divisions;
+  out.plates = q.plates === 'hidden' ? [] : PLATES.filter((p) => (a.plates || []).includes(p));
+  // 数を答える設問。任意で空欄なら null
+  const count = (k, v, label) => {
+    if (q[k] === 'hidden' || blank(v)) { if (q[k] === 'required') throw err(400, `${label}を入力してください`); return null; }
     const n = Number(v);
-    if (v === '' || v == null || !Number.isInteger(n) || n < 0 || n > 9999) throw err(400, `${label}を0以上の整数で入力してください`);
+    if (!Number.isInteger(n) || n < 0 || n > 9999) throw err(400, `${label}を0以上の整数で入力してください`);
     return n;
   };
-  const out = { discord, divisions, plates };
   if (divisions.includes('lime')) {
     const l = a.lime || {};
-    if (typeof l.lv14 !== 'boolean') throw err(400, '【らいむ部門】自選曲にレベル14を含められるようにしたいか選んでください');
-    out.lime = { m5: count(l.m5, '【らいむ部門】MASTERの星5達成譜面数'), r5: count(l.r5, '【らいむ部門】Re:MASTERの星5達成譜面数'), s6: count(l.s6, '【らいむ部門】星6達成合計譜面数'), lv14: l.lv14 };
+    let lv14 = null;
+    if (q.lv14 !== 'hidden' && typeof l.lv14 === 'boolean') lv14 = l.lv14;
+    else if (q.lv14 === 'required') throw err(400, '【らいむ部門】自選曲にレベル14を含められるようにしたいか選んでください');
+    out.lime = { m5: count('m5', l.m5, '【らいむ部門】MASTERの星5達成譜面数'), r5: count('r5', l.r5, '【らいむ部門】Re:MASTERの星5達成譜面数'), s6: count('s6', l.s6, '【らいむ部門】星6達成合計譜面数'), lv14 };
   }
   if (divisions.includes('lemon')) {
     const l = a.lemon || {};
-    out.lemon = { ap14: count(l.ap14, '【れもん部門】レベル14のAP達成譜面数'), ap14p: count(l.ap14p, '【れもん部門】レベル14+のAP達成譜面数') };
+    out.lemon = { ap14: count('ap14', l.ap14, '【れもん部門】レベル14のAP達成譜面数'), ap14p: count('ap14p', l.ap14p, '【れもん部門】レベル14+のAP達成譜面数') };
   }
+  // 運営が足した設問（その部門に申請したときだけ答える設問もある）
+  const custom = {};
+  for (const c of form.custom) {
+    if (c.mode === 'hidden' || (c.div && !divisions.includes(c.div))) continue;
+    const v = a.custom?.[c.id];
+    const empty = c.type === 'multi' ? !Array.isArray(v) || !v.length : blank(v);
+    if (empty) { if (c.mode === 'required') throw err(400, `「${c.label}」に答えてください`); continue; }
+    if (c.type === 'text') custom[c.id] = String(v).trim().slice(0, 500);
+    else if (c.type === 'number') {
+      const n = Number(v);
+      if (!Number.isFinite(n)) throw err(400, `「${c.label}」は数で入力してください`);
+      custom[c.id] = n;
+    } else if (c.type === 'choice') {
+      if (!c.options.includes(String(v))) throw err(400, `「${c.label}」の選択肢から選んでください`);
+      custom[c.id] = String(v);
+    } else {
+      const pick = c.options.filter((o) => v.map(String).includes(o));
+      if (!pick.length && c.mode === 'required') throw err(400, `「${c.label}」の選択肢から選んでください`);
+      custom[c.id] = pick;
+    }
+  }
+  out.custom = custom;
   return out;
 }
 
@@ -312,6 +395,8 @@ function dup(e) {
 
 // 自選曲として選べるか：上限以下。Lv14解禁の試合では、上限を超える Lv14（14.0〜14.5）を1曲まで
 const isLv14 = (c) => c >= 14 - 1e-9 && c < 14.6 - 1e-9;
+// Lv14 解禁はらいむ部門だけ（前に保存された試合も含めて、れもん部門は解禁しない）
+const unlocked = (m) => m.div === 'lime' && !!m.lv14;
 function checkSongs(consts, songs, m, mini) {
   let over = 0;
   for (const k of songs) {
@@ -319,8 +404,8 @@ function checkSongs(consts, songs, m, mini) {
     if (c0 === undefined) throw err(400, '譜面データにない譜面が含まれています');
     if (!mini && ((m.kadai && k === m.kadai))) throw err(400, '運営課題曲は自選曲に選べません');
     if (c0 <= Number(m.cap) + 1e-9) continue;
-    if (m.lv14 && isLv14(c0)) { over++; continue; }
-    throw err(400, `譜面定数 ${Number(m.cap).toFixed(1)} を超える譜面は選べません${m.lv14 ? '（レベル14を1曲だけ除く）' : ''}`);
+    if (unlocked(m) && isLv14(c0)) { over++; continue; }
+    throw err(400, `譜面定数 ${Number(m.cap).toFixed(1)} を超える譜面は選べません${unlocked(m) ? '（レベル14を1曲だけ除く）' : ''}`);
   }
   if (over > 1) throw err(400, '上限を超えるレベル14の譜面は1曲までです');
 }
@@ -353,7 +438,7 @@ async function me(user, env) {
   const mini = c.s.format === 'mini';
   const matches = c.list.map(({ m, no, opp, mine, theirs }) => ({
     id: m.id, no, div: m.div || '', divName: DIVISIONS.find((d) => d.id === m.div)?.name || '',
-    cap: m.cap, lv14: !!m.lv14, kadai: mini ? '' : m.kadai || '',
+    cap: m.cap, lv14: unlocked(m), kadai: mini ? '' : m.kadai || '',
     // 運営課題曲2：両者が同じ曲を自選曲にしたときだけ、対戦曲確定の段階で公開
     kadai2: !mini && ph >= 4 && mine.pick >= 0 && theirs.pick >= 0 && mine.songs[mine.pick] === theirs.songs[theirs.pick] ? m.kadai2 || '' : '',
     opponent: opp ? { entryName: opp.entry_name } : null,
@@ -631,7 +716,7 @@ async function admin(req, env, sub, m) {
   const em = sub.match(/^entries\/(\d+)$/);
   if (em && m === 'PUT') {
     const b = await body(req);
-    const v = validateEntry(b);
+    const v = validateEntry(b, (await getSettings(env)).form, true);
     const memo = String(b.memo ?? '').slice(0, 200);
     const cur = await env.DB.prepare('SELECT answers FROM entries WHERE id=?').bind(+em[1]).first();
     const prev = JSON.parse(cur?.answers || '{}');
@@ -662,6 +747,7 @@ async function admin(req, env, sub, m) {
     if (b.settings) {
       if (b.settings.phase && !PHASES.includes(b.settings.phase)) throw err(400, '段階の指定が正しくありません');
       if (b.settings.format && !['main', 'mini'].includes(b.settings.format)) throw err(400, '大会の形式の指定が正しくありません');
+      if (b.settings.form !== undefined) b.settings.form = normForm(b.settings.form, true);
       await putKV(env, 'settings', { ...(await getSettings(env)), ...b.settings });
     }
     if (Array.isArray(b.matches)) {
@@ -673,7 +759,7 @@ async function admin(req, env, sub, m) {
         kadai: String(x.kadai || ''),
         kadai2: String(x.kadai2 || ''),
         div: DIVISIONS.some((d) => d.id === x.div) ? x.div : '',
-        lv14: !!x.lv14,
+        lv14: x.div === 'lime' && !!x.lv14, // Lv14 解禁はらいむ部門だけ
         winner: ['a', 'b', 'draw', 'none'].includes(x.winner) ? x.winner : '', // 運営が手で決めた勝敗（空なら自動）
       }));
       await putKV(env, 'matches', ms);
@@ -829,7 +915,7 @@ async function getSettings(env) {
   const s = (await getKV(env, 'settings')) ?? {};
   const dd = {};
   for (const k of Object.keys(DEFAULT_SETTINGS.divDefaults)) dd[k] = { ...DEFAULT_SETTINGS.divDefaults[k], ...(s.divDefaults?.[k] || {}) };
-  return { ...DEFAULT_SETTINGS, ...s, notes: { ...DEFAULT_SETTINGS.notes, ...(s.notes || {}) }, divDefaults: dd };
+  return { ...DEFAULT_SETTINGS, ...s, notes: { ...DEFAULT_SETTINGS.notes, ...(s.notes || {}) }, divDefaults: dd, form: normForm(s.form) };
 }
 async function getKV(env, key) {
   const r = await env.DB.prepare('SELECT value FROM kv WHERE key=?').bind(key).first();

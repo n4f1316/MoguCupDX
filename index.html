@@ -103,6 +103,9 @@ fieldset.q legend{padding:0;margin-bottom:4px}
 .hp{position:absolute;left:-9999px;width:1px;height:1px;overflow:hidden}
 .foot{font-size:12px;color:var(--muted);line-height:1.8}
 @media (max-width:520px){.srow{grid-template-columns:40px minmax(0,1fr)}.srow .go{display:none}.jk{width:40px;height:40px}.song{grid-template-columns:40px minmax(0,1fr) auto}}
+.qcustom{display:grid;gap:14px}
+.qcustom:empty{display:none}
+.q i.opt{color:var(--muted)}
 </style>
 </head>
 <body>
@@ -148,10 +151,10 @@ fieldset.q legend{padding:0;margin-bottom:4px}
   <form class="panel" id="entryForm" hidden novalidate>
     <h2>参加申請</h2>
     <p class="note from2fNote" id="from2fNote" hidden>2fRATE に登録されている値を、2fRATE・☆5・☆6 の欄にあらかじめ入れています（色の付いた欄）。違っていれば書き直してください。</p>
-    <label class="q"><span><b>Q1.</b> あなたの X（Twitter）の ID を教えてください <i>必須</i></span>
+    <label class="q" data-q="xId"><span><b>Q1.</b> あなたの X（Twitter）の ID を教えてください <i>必須</i></span>
       <input id="xId" type="text" maxlength="16" placeholder="記入例：@Porto_mint" autocapitalize="off" spellcheck="false">
     </label>
-    <label class="q"><span><b>Q2.</b> あなたが Discord で使用している名前を教えてください <i>必須</i></span>
+    <label class="q" data-q="discord"><span><b>Q2.</b> あなたが Discord で使用している名前を教えてください <i>必須</i></span>
       <small>マッチング決定後のロール振り分けや、Discord サーバーへの参加の可否を確認するために使用します。Discord Nitro に課金していてサーバーでの名前を変える予定の方は、本スコアタの Discord サーバーで使用する名前を記入してください。</small>
       <input id="discord" type="text" maxlength="40" autocapitalize="off" spellcheck="false">
     </label>
@@ -161,36 +164,39 @@ fieldset.q legend{padding:0;margin-bottom:4px}
     <fieldset class="q"><legend><b>Q4.</b> あなたが参加したい部門を選択してください（複数選択可） <i>必須</i></legend>
       <div class="checks" id="divChecks"></div>
     </fieldset>
-    <label class="q"><span><b>Q5.</b> あなたの現在のレートを教えてください <i>必須</i></span>
+    <label class="q" data-q="rating"><span><b>Q5.</b> あなたの現在のレートを教えてください <i>必須</i></span>
       <input id="rating" type="number" inputmode="numeric" min="0" max="20000" step="1" placeholder="例 15800">
     </label>
-    <label class="q"><span><b>Q6.</b> あなたの 2fRATE（☆7まで）を教えてください <i>必須</i></span>
+    <label class="q" data-q="frate"><span><b>Q6.</b> あなたの 2fRATE（☆7まで）を教えてください <i>必須</i></span>
       <small><a href="https://n4f1316.github.io/dxscore-tools/" target="_blank" rel="noopener">2fRATE のページ</a>で確認できます。</small>
       <input id="frate" type="number" inputmode="decimal" min="0" max="30" step="0.001" placeholder="例 13.452">
     </label>
-    <fieldset class="q"><legend><b>Q7.</b> あなたの神プレートの獲得状況について教えてください</legend>
+    <fieldset class="q" data-q="plates"><legend><b>Q7.</b> あなたの神プレートの獲得状況について教えてください <i>任意</i></legend>
       <small>回答するのは、14以上の MASTER 譜面が終了しているものにしてください。該当なしの場合は未回答で大丈夫です。</small>
       <div class="btns"><button type="button" id="plateAll" class="ghost">すべて選択</button></div>
       <div class="checks plates" id="plateChecks"></div>
     </fieldset>
+    <div id="qCustom" class="qcustom"></div>
     <div class="divq" id="qLime" hidden>
       <h3><span class="divpill lime">らいむ部門</span></h3>
       <div class="row">
-        <label class="q"><span><b>Q8.</b> MASTER の星5達成譜面数 <i>必須</i></span><input id="m5" type="number" inputmode="numeric" min="0" step="1"></label>
-        <label class="q"><span><b>Q9.</b> Re:MASTER の星5達成譜面数 <i>必須</i></span><input id="r5" type="number" inputmode="numeric" min="0" step="1"></label>
-        <label class="q"><span><b>Q10.</b> MASTER・Re:MASTER の星6達成合計譜面数 <i>必須</i></span><input id="s6" type="number" inputmode="numeric" min="0" step="1"></label>
+        <label class="q" data-q="m5"><span><b>Q8.</b> MASTER の星5達成譜面数 <i>必須</i></span><input id="m5" type="number" inputmode="numeric" min="0" step="1"></label>
+        <label class="q" data-q="r5"><span><b>Q9.</b> Re:MASTER の星5達成譜面数 <i>必須</i></span><input id="r5" type="number" inputmode="numeric" min="0" step="1"></label>
+        <label class="q" data-q="s6"><span><b>Q10.</b> MASTER・Re:MASTER の星6達成合計譜面数 <i>必須</i></span><input id="s6" type="number" inputmode="numeric" min="0" step="1"></label>
       </div>
-      <fieldset class="q"><legend><b>Q11.</b> 自選曲にレベル14を1曲含められるようにしたいですか？ <i>必須</i></legend>
+      <fieldset class="q" data-q="lv14"><legend><b>Q11.</b> 自選曲にレベル14を1曲含められるようにしたいですか？ <i>必須</i></legend>
         <small>マッチング決定時に両者が承諾した場合にのみ、レベル14が解禁されます。そのため、承諾した場合でもレベル14を自選曲に含められない可能性があります。</small>
         <div class="checks"><label><input type="radio" name="lv14" value="yes">はい</label><label><input type="radio" name="lv14" value="no">いいえ</label></div>
       </fieldset>
+      <div id="qCustomLime" class="qcustom"></div>
     </div>
     <div class="divq" id="qLemon" hidden>
       <h3><span class="divpill lemon">れもん部門</span></h3>
       <div class="row">
-        <label class="q"><span><b>Q12.</b> レベル14の AP 達成譜面数 <i>必須</i></span><input id="ap14" type="number" inputmode="numeric" min="0" step="1"></label>
-        <label class="q"><span><b>Q13.</b> レベル14+の AP 達成譜面数 <i>必須</i></span><input id="ap14p" type="number" inputmode="numeric" min="0" step="1"></label>
+        <label class="q" data-q="ap14"><span><b>Q12.</b> レベル14の AP 達成譜面数 <i>必須</i></span><input id="ap14" type="number" inputmode="numeric" min="0" step="1"></label>
+        <label class="q" data-q="ap14p"><span><b>Q13.</b> レベル14+の AP 達成譜面数 <i>必須</i></span><input id="ap14p" type="number" inputmode="numeric" min="0" step="1"></label>
       </div>
+      <div id="qCustomLemon" class="qcustom"></div>
     </div>
     <div class="hp" aria-hidden="true"><label>website<input id="website" tabindex="-1" autocomplete="off"></label></div>
     <div class="btns"><button class="primary" type="submit">申請する</button></div>
@@ -212,6 +218,6 @@ fieldset.q legend{padding:0;margin-bottom:4px}
 <script src="common.js?v=20261110b"></script>
 <script src="draw.js?v=20261110b"></script>
 <script src="ocr.js?v=20261111e"></script>
-<script src="player.js?v=20261111e"></script>
+<script src="player.js?v=20261115b"></script>
 </body>
 </html>

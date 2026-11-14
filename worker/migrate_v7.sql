@@ -1,0 +1,2 @@
+DROP INDEX IF EXISTS entries_x;
+CREATE UNIQUE INDEX IF NOT EXISTS entries_x ON entries (x_id COLLATE NOCASE) WHERE x_id <> '';

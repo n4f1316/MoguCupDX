@@ -68,6 +68,11 @@ td input{padding:3px 6px;font-size:14px}
 .bmbox ol{margin:0;padding-left:1.4em;display:grid;gap:2px}
 .bmlink{display:inline-block;padding:8px 16px;border-radius:999px;background:var(--accent);color:var(--accent-fg);font-weight:700;text-decoration:none;cursor:grab}
 .divdef{border-left:3px solid var(--accent);padding-left:12px;display:grid;gap:8px}
+.qgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:8px 14px}
+.qgrid label{display:flex;justify-content:space-between;align-items:center;gap:8px}
+.qgrid select{width:auto}
+.cq{border-left:3px solid var(--accent);padding-left:12px;display:grid;gap:6px}
+.cq .row{align-items:end}
 .divdef h3{margin:0;font-family:var(--f-display);font-size:.95rem}
 #matchDiv button[aria-selected="true"],#imgDiv button[aria-selected="true"]{background:var(--panel);color:var(--fg);border-color:var(--accent);box-shadow:inset 0 0 0 2px var(--accent);font-weight:700}
 </style>
@@ -123,6 +128,12 @@ td input{padding:3px 6px;font-size:14px}
         <label>申請の締切（日本時間、空欄で期限なし）<input id="sDeadline" type="datetime-local"></label>
       </div>
       <label>参加者ページのお知らせ<textarea id="sNotice" rows="2"></textarea></label>
+      <h2>申請の設問</h2>
+      <p class="note">設問ごとに「必須／任意／出さない」を選べます。スコアタで使用する名前と参加部門は常に必須です。2fRATE が使えない人がいるときは 2fRATE を任意に、maimai でらっくす NET が使えないときはレートや達成数を任意にする、といった使い方ができます。保存すると参加申請フォームに反映されます（すでに届いた申請はそのままです）。</p>
+      <div id="formBuiltin" class="qgrid"></div>
+      <h3 style="margin:8px 0 0;font-size:.95rem">追加の設問</h3>
+      <div id="formCustom" style="display:grid;gap:10px"></div>
+      <div class="btns"><button type="button" id="addQ">設問を追加</button></div>
       <h2>大会の形式</h2>
       <label>形式<select id="sFormat">
         <option value="main">本編（自選曲＋他選曲＋運営課題曲）</option>
@@ -217,6 +228,6 @@ td input{padding:3px 6px;font-size:14px}
 <script src="config.js?v=20261110b"></script>
 <script src="common.js?v=20261110b"></script>
 <script src="draw.js?v=20261110b"></script>
-<script src="admin.js?v=20261110b"></script>
+<script src="admin.js?v=20261115b"></script>
 </body>
 </html>

@@ -70,7 +70,7 @@ function buildMatches(ms, picks) {
   return (ms || []).map((m) => {
     const pa = row(m.id, m.a), pb = row(m.id, m.b);
     return {
-      id: m.id || newId(), div: m.div || DIVISIONS[0].id, a: m.a ?? null, b: m.b ?? null, cap: m.cap ?? 14, kadai: m.kadai || '', kadai2: m.kadai2 || '', lv14: !!m.lv14, winner: m.winner || '',
+      id: m.id || newId(), div: m.div || DIVISIONS[0].id, a: m.a ?? null, b: m.b ?? null, cap: m.cap ?? 14, kadai: m.kadai || '', kadai2: m.kadai2 || '', lv14: m.div === 'lime' && !!m.lv14, winner: m.winner || '',
       aSongs: [0, 1, 2].map((i) => pa.songs[i] || ''), bSongs: [0, 1, 2].map((i) => pb.songs[i] || ''),
       aBan: pb.ban, bBan: pa.ban, aPick: pa.pick, bPick: pb.pick, edited: false,
     };
@@ -81,7 +81,8 @@ $('#saveState').onclick = async () => {
   readSettingsForm();
   const btn = $('#saveState'); btn.disabled = true;
   try {
-    const plain = matches.map(({ id, div, a, b, cap, kadai, kadai2, lv14, winner }) => ({ id, div, a, b, cap, kadai, kadai2, lv14, winner }));
+    // Lv14 解禁はらいむ部門だけ（れもん部門には解禁の仕組みがない）
+    const plain = matches.map(({ id, div, a, b, cap, kadai, kadai2, lv14, winner }) => ({ id, div, a, b, cap, kadai, kadai2, lv14: div === 'lime' && !!lv14, winner }));
     // 運営が直した試合の選曲だけ送る（参加者がその後に提出した内容を上書きしないため）
     const items = [];
     matches.filter((m) => m.edited).forEach((m) => {
@@ -122,22 +123,31 @@ const inDiv = (e, div) => (A(e).divisions || []).includes(div);
 const COLS = [
   ['id', 'No.', (e) => e.id, (e) => e.id, 1],
   ['entry_name', '名前', (e) => e.entry_name, (e) => esc(e.entry_name)],
-  ['x_id', 'X', (e) => e.x_id.toLowerCase(), (e) => `<a href="https://x.com/${encodeURIComponent(e.x_id)}" target="_blank" rel="noopener">@${esc(e.x_id)}</a>`],
+  ['x_id', 'X', (e) => (e.x_id || '').toLowerCase(), (e) => (e.x_id ? `<a href="https://x.com/${encodeURIComponent(e.x_id)}" target="_blank" rel="noopener">@${esc(e.x_id)}</a>` : '-')],
   ['discord', 'Discord', (e) => A(e).discord || '', (e) => esc(A(e).discord || '-')],
   ['div', '部門', (e) => (A(e).divisions || []).join(), (e) => (A(e).divisions || []).map((d) => divPill(d, true)).join(' ') || '-'],
   ['username', 'ユーザー', (e) => e.username || '', (e) => userCell(e)],
-  ['rating', 'レート', (e) => e.rating, (e) => e.rating, 1],
-  ['frate', '2fRATE', (e) => e.frate, (e) => Number(e.frate).toFixed(3), 1],
+  ['rating', 'レート', (e) => e.rating, (e) => (e.rating >= 0 ? e.rating : '-'), 1],
+  ['frate', '2fRATE', (e) => e.frate, (e) => fmtFrate(e.frate), 1],
   ['plates', '神', (e) => (A(e).plates || []).length, (e) => { const p = A(e).plates || []; return p.length ? `<span title="${esc(p.map((x) => x + '神').join(' '))}">${p.length}（${esc(p.join(''))}）</span>` : '-'; }, 1],
   ['m5', 'MAS☆5', (e) => A(e).lime?.m5 ?? -1, (e) => A(e).lime?.m5 ?? '-', 1],
   ['r5', 'ReM☆5', (e) => A(e).lime?.r5 ?? -1, (e) => A(e).lime?.r5 ?? '-', 1],
   ['s6', '☆6計', (e) => A(e).lime?.s6 ?? -1, (e) => A(e).lime?.s6 ?? '-', 1],
-  ['lv14', 'Lv14希望', (e) => (A(e).lime ? (A(e).lime.lv14 ? 1 : 0) : -1), (e) => (A(e).lime ? (A(e).lime.lv14 ? 'はい' : 'いいえ') : '-')],
+  ['lv14', 'Lv14希望', (e) => (A(e).lime?.lv14 === true ? 1 : A(e).lime?.lv14 === false ? 0 : -1), (e) => yesNo(A(e).lime?.lv14)],
   ['ap14', 'AP14', (e) => A(e).lemon?.ap14 ?? -1, (e) => A(e).lemon?.ap14 ?? '-', 1],
   ['ap14p', 'AP14+', (e) => A(e).lemon?.ap14p ?? -1, (e) => A(e).lemon?.ap14p ?? '-', 1],
+  'CUSTOM',
   ['created_at', '申請日時', (e) => e.created_at, (e) => esc(fmtTime(e.created_at))],
   ['memo', 'メモ', (e) => e.memo, (e) => esc(e.memo)],
 ];
+const fmtFrate = (v) => (v >= 0 ? Number(v).toFixed(3) : '-');
+const yesNo = (v) => (v === true ? 'はい' : v === false ? 'いいえ' : '-');
+const customQs = () => settings?.form?.custom || [];
+const customVal = (e, c) => { const v = A(e).custom?.[c.id]; return v === undefined ? '' : Array.isArray(v) ? v.join('、') : String(v); };
+// 運営が足した設問の列は「申請日時」の前に入れる
+const cols = () => COLS.flatMap((c) => (c === 'CUSTOM'
+  ? customQs().map((q) => ['cq_' + q.id, q.label.length > 12 ? q.label.slice(0, 12) + '…' : q.label, (e) => (q.type === 'number' ? Number(A(e).custom?.[q.id] ?? -Infinity) : customVal(e, q)), (e) => esc(customVal(e, q) || '-'), q.type === 'number' ? 1 : 0])
+  : [c]));
 const entryById = (id) => entries.find((e) => e.id === id);
 const fmtTime = (s) => {
   const d = new Date(s.replace(' ', 'T') + 'Z');
@@ -149,12 +159,13 @@ function renderEntries() {
   const shown = entries.filter((e) => entryDiv === 'all' || inDiv(e, entryDiv));
   $('#entryCount').textContent = `（${shown.length}人${entryDiv === 'all' ? '' : '／全' + entries.length + '人'}）`;
   $('#entryDiv').innerHTML = `<option value="all">すべての部門</option>` + DIVISIONS.map((d) => `<option value="${d.id}"${entryDiv === d.id ? ' selected' : ''}>${d.name}（${entries.filter((e) => inDiv(e, d.id)).length}人）</option>`).join('');
-  const col = COLS.find((c) => c[0] === sortKey) || COLS[0];
+  const COLS_ = cols();
+  const col = COLS_.find((c) => c[0] === sortKey) || COLS_[0];
   const rows = shown.sort((x, y) => {
     const a = col[2](x), b = col[2](y);
     return (typeof a === 'number' ? a - b : String(a).localeCompare(String(b), 'ja')) * sortDir;
   });
-  const head = '<tr>' + COLS.map(([k, t, , , n]) => `<th class="${n ? 'num' : ''}"><button type="button" data-sort="${k}">${t}${sortKey === k ? (sortDir > 0 ? ' ▲' : ' ▼') : ''}</button></th>`).join('') + '<th></th></tr>';
+  const head = '<tr>' + COLS_.map(([k, t, , , n]) => `<th class="${n ? 'num' : ''}"><button type="button" data-sort="${k}">${t}${sortKey === k ? (sortDir > 0 ? ' ▲' : ' ▼') : ''}</button></th>`).join('') + '<th></th></tr>';
   const body = rows.map((e) => {
     if (editing === e.id) {
       const cells = {
@@ -162,17 +173,17 @@ function renderEntries() {
         x_id: `<input id="ed-x" value="${esc(e.x_id)}" maxlength="15">`,
         discord: `<input id="ed-discord" value="${esc(A(e).discord || '')}" maxlength="40">`,
         div: DIVISIONS.map((d) => `<label style="display:flex;gap:4px;align-items:center"><input type="checkbox" class="ed-div" value="${d.id}"${inDiv(e, d.id) ? ' checked' : ''}>${divPill(d.id, true)}</label>`).join(''),
-        rating: `<input id="ed-rating" type="number" value="${e.rating}" style="width:7em">`,
-        frate: `<input id="ed-frate" type="number" step="0.001" value="${e.frate}" style="width:7em">`,
+        rating: `<input id="ed-rating" type="number" value="${e.rating >= 0 ? e.rating : ''}" style="width:7em">`,
+        frate: `<input id="ed-frate" type="number" step="0.001" value="${e.frate >= 0 ? e.frate : ''}" style="width:7em">`,
         memo: `<input id="ed-memo" value="${esc(e.memo)}" maxlength="200">`,
       };
-      return `<tr data-id="${e.id}">${COLS.map(([k, , , show, n]) => `<td class="${n ? 'num' : ''}">${cells[k] ?? show(e)}</td>`).join('')}
+      return `<tr data-id="${e.id}">${COLS_.map(([k, , , show, n]) => `<td class="${n ? 'num' : ''}">${cells[k] ?? show(e)}</td>`).join('')}
         <td><div class="btns"><button type="button" class="primary" data-act="save">保存</button><button type="button" class="ghost" data-act="cancel">やめる</button></div></td></tr>`;
     }
-    return `<tr data-id="${e.id}">${COLS.map(([, , , show, n]) => `<td class="${n ? 'num' : ''}">${show(e)}</td>`).join('')}
+    return `<tr data-id="${e.id}">${COLS_.map(([, , , show, n]) => `<td class="${n ? 'num' : ''}">${show(e)}</td>`).join('')}
       <td><div class="btns"><button type="button" data-act="edit">編集</button>${e.source === 'local' ? '<button type="button" data-act="pin">仮PIN</button>' : ''}<button type="button" class="danger" data-act="del">削除</button></div></td></tr>`;
   }).join('');
-  $('#entryTable').innerHTML = `<thead>${head}</thead><tbody>${body || `<tr><td colspan="${COLS.length + 1}" class="note">まだ申請はありません</td></tr>`}</tbody>`;
+  $('#entryTable').innerHTML = `<thead>${head}</thead><tbody>${body || `<tr><td colspan="${COLS_.length + 1}" class="note">まだ申請はありません</td></tr>`}</tbody>`;
 }
 $('#entryDiv').onchange = (e) => { entryDiv = e.target.value; renderEntries(); };
 
@@ -185,13 +196,13 @@ $('#entryTable').addEventListener('click', async (ev) => {
   if (act === 'cancel') { editing = null; return renderEntries(); }
   if (act === 'save') {
     const body = {
-      entryName: $('#ed-name').value, xId: $('#ed-x').value, rating: Number($('#ed-rating').value), frate: Number($('#ed-frate').value), memo: $('#ed-memo').value,
+      entryName: $('#ed-name').value, xId: $('#ed-x').value, rating: numOrNull($('#ed-rating').value), frate: numOrNull($('#ed-frate').value), memo: $('#ed-memo').value,
       discord: $('#ed-discord').value, divisions: $$('.ed-div:checked').map((x) => x.value),
     };
     try {
       await api('api/admin/entries/' + id, { method: 'PUT', key: KEY, body });
       const e = entryById(id);
-      Object.assign(e, { entry_name: body.entryName.trim(), x_id: body.xId.trim().replace(/^@/, ''), rating: body.rating, frate: body.frate, memo: body.memo });
+      Object.assign(e, { entry_name: body.entryName.trim(), x_id: body.xId.trim().replace(/^@/, ''), rating: body.rating ?? -1, frate: body.frate ?? -1, memo: body.memo });
       e.answers = { ...A(e), discord: body.discord.trim(), divisions: body.divisions };
       editing = null; renderEntries(); renderMatches(); setMsg('参加者を更新しました', 'ok');
     } catch (er) { setMsg(er.message, 'err'); }
@@ -218,15 +229,16 @@ $('#entryTable').addEventListener('click', async (ev) => {
   }
 });
 
+const numOrNull = (v) => (String(v).trim() === '' ? null : Number(v));
 $('#csv').onclick = () => {
   const q = (v) => `"${String(v ?? '').replace(/"/g, '""')}"`;
   const head = ['No.', 'スコアタで使用する名前', 'X', 'Discord', '部門', 'ユーザー', 'レート', '2fRATE', '神プレート',
-    '【らいむ】MASTER星5', '【らいむ】Re:MASTER星5', '【らいむ】星6合計', '【らいむ】Lv14希望', '【れもん】Lv14 AP', '【れもん】Lv14+ AP', '申請日時', 'メモ'];
+    '【らいむ】MASTER星5', '【らいむ】Re:MASTER星5', '【らいむ】星6合計', '【らいむ】Lv14希望', '【れもん】Lv14 AP', '【れもん】Lv14+ AP', ...customQs().map((c) => c.label), '申請日時', 'メモ'];
   const rows = entries.filter((e) => entryDiv === 'all' || inDiv(e, entryDiv)).map((e) => {
     const a = A(e);
-    return [e.id, e.entry_name, '@' + e.x_id, a.discord, (a.divisions || []).map(divName).join('・'), e.username || '', e.rating, e.frate,
-      (a.plates || []).map((p) => p + '神').join(' '), a.lime?.m5, a.lime?.r5, a.lime?.s6, a.lime ? (a.lime.lv14 ? 'はい' : 'いいえ') : '',
-      a.lemon?.ap14, a.lemon?.ap14p, fmtTime(e.created_at), e.memo];
+    return [e.id, e.entry_name, e.x_id ? '@' + e.x_id : '', a.discord, (a.divisions || []).map(divName).join('・'), e.username || '', e.rating >= 0 ? e.rating : '', e.frate >= 0 ? e.frate : '',
+      (a.plates || []).map((p) => p + '神').join(' '), a.lime?.m5, a.lime?.r5, a.lime?.s6, a.lime ? yesNo(a.lime.lv14).replace('-', '') : '',
+      a.lemon?.ap14, a.lemon?.ap14p, ...customQs().map((c) => customVal(e, c)), fmtTime(e.created_at), e.memo];
   });
   const lines = [head, ...rows].map((r) => r.map(q).join(','));
   const blob = new Blob(['﻿' + lines.join('\r\n')], { type: 'text/csv' });
@@ -300,6 +312,7 @@ function renderSettingsForm() {
   $('#sPhaseNote').value = s.phaseNote || '';
   $('#nPair').value = s.notes.pair; $('#nReveal').value = s.notes.reveal; $('#nBan').value = s.notes.ban || ''; $('#nFinal').value = s.notes.final; $('#nResult').value = s.notes.result || '';
   $('#sFormat').value = s.format || 'main';
+  renderFormEditor();
   const box = $('#divDefaults');
   box.replaceChildren();
   DIVISIONS.forEach((d) => {
@@ -315,6 +328,64 @@ function renderSettingsForm() {
     box.append(sec);
   });
 }
+// ---------- 申請の設問 ----------
+const BUILTIN_Q = [['xId', 'X の ID'], ['discord', 'Discord の名前'], ['rating', '現在のレート'], ['frate', '2fRATE'], ['plates', '神プレート'],
+  ['m5', '【らいむ】MASTER 星5'], ['r5', '【らいむ】Re:MASTER 星5'], ['s6', '【らいむ】星6合計'], ['lv14', '【らいむ】Lv14 の希望'],
+  ['ap14', '【れもん】Lv14 AP'], ['ap14p', '【れもん】Lv14+ AP']];
+const MODE_OPTS = [['required', '必須'], ['optional', '任意'], ['hidden', '出さない']];
+const TYPE_OPTS = [['text', '記述'], ['number', '数値'], ['choice', '選択（1つ）'], ['multi', '選択（複数）']];
+const opts = (list, sel) => list.map(([v, t]) => `<option value="${v}"${v === sel ? ' selected' : ''}>${t}</option>`).join('');
+const formOf = () => (settings.form = settings.form || { q: {}, custom: [] });
+function renderFormEditor() {
+  const f = formOf();
+  $('#formBuiltin').innerHTML = BUILTIN_Q.map(([k, t]) => `<label>${t}<select data-fq="${k}">${opts(MODE_OPTS, f.q[k] || 'required')}</select></label>`).join('');
+  $('#formCustom').innerHTML = f.custom.map((c, i) => `<div class="cq" data-ci="${i}">
+    <div class="row"><label style="flex:2">設問文<input class="cq-label" value="${esc(c.label)}" maxlength="100" placeholder="例 maimai でらっくす NET を使えますか？"></label>
+      <label>答え方<select class="cq-type">${opts(TYPE_OPTS, c.type)}</select></label>
+      <label>必須かどうか<select class="cq-mode">${opts(MODE_OPTS, c.mode)}</select></label>
+      <label>対象<select class="cq-div">${opts([['', '全員'], ...DIVISIONS.map((d) => [d.id, d.name + 'の申請者'])], c.div || '')}</select></label></div>
+    <label${c.type === 'choice' || c.type === 'multi' ? '' : ' hidden'}>選択肢（「,」か「、」で区切る）<input class="cq-options" value="${esc(c.options.join('、'))}"></label>
+    <div class="row"><label style="flex:2">補足（任意）<input class="cq-note" value="${esc(c.note || '')}" maxlength="200"></label>
+      <div class="btns" style="align-self:end"><button type="button" data-cq="up"${i ? '' : ' disabled'}>↑</button><button type="button" data-cq="down"${i < f.custom.length - 1 ? '' : ' disabled'}>↓</button><button type="button" class="danger" data-cq="del">削除</button></div></div>
+  </div>`).join('') || '<p class="note">追加の設問はありません。</p>';
+}
+function readFormEditor() {
+  if (!$('#formBuiltin').children.length) return;
+  const f = formOf();
+  $$('[data-fq]').forEach((x) => (f.q[x.dataset.fq] = x.value));
+  $$('#formCustom .cq').forEach((box) => {
+    const c = f.custom[+box.dataset.ci]; if (!c) return;
+    c.label = $('.cq-label', box).value.trim(); c.type = $('.cq-type', box).value; c.mode = $('.cq-mode', box).value;
+    c.div = $('.cq-div', box).value; c.note = $('.cq-note', box).value.trim();
+    c.options = [...new Set($('.cq-options', box).value.split(/[,、，\n]/).map((o) => o.trim()).filter(Boolean))];
+  });
+}
+$('#addQ').onclick = () => {
+  readFormEditor();
+  formOf().custom.push({ id: 'c' + Math.random().toString(36).slice(2, 8).padEnd(6, '0'), label: '', type: 'text', options: [], mode: 'optional', div: '', note: '' });
+  markDirty(); renderFormEditor();
+  $('#formCustom .cq:last-child .cq-label')?.focus();
+};
+$('#formCustom').addEventListener('click', (ev) => {
+  const b = ev.target.closest('[data-cq]'); if (!b) return;
+  readFormEditor();
+  const list = formOf().custom, i = +b.closest('.cq').dataset.ci;
+  const done = () => { markDirty(); renderFormEditor(); renderEntries(); };
+  if (b.dataset.cq === 'del') {
+    const c = list[i];
+    const del = () => { list.splice(list.indexOf(c), 1); done(); };
+    // 回答が届いている設問は2回押しで削除（回答そのものはデータに残る）
+    if (entries.some((e) => A(e).custom?.[c.id] !== undefined)) return confirmTwice(b, '回答あり。もう一度押すと削除', del);
+    return del();
+  }
+  const j = b.dataset.cq === 'up' ? i - 1 : i + 1;
+  [list[i], list[j]] = [list[j], list[i]];
+  done();
+});
+$('#formCustom').addEventListener('change', (ev) => {
+  if (ev.target.classList.contains('cq-type')) { readFormEditor(); renderFormEditor(); }
+});
+
 function readSettingsForm() {
   if (!settings) return;
   Object.assign(settings, {
@@ -328,6 +399,7 @@ function readSettingsForm() {
     const inp = $(`#dd-${d.id}-cap`);
     settings.divDefaults[d.id] = { ...defOf(d.id), ...(inp ? { cap: Number(inp.value) || 15 } : {}) };
   });
+  readFormEditor();
   settings.notes = { pair: $('#nPair').value, reveal: $('#nReveal').value, ban: $('#nBan').value, final: $('#nFinal').value, result: $('#nResult').value };
 }
 $('[data-pane=settings]').addEventListener('input', (e) => {
@@ -361,7 +433,7 @@ function divTabs(el, onPick) {
 function entryOptions(sel) {
   const list = divEntries(curDiv);
   const extra = sel != null && !list.some((e) => e.id === sel) ? [entryById(sel)].filter(Boolean) : [];
-  return '<option value="">（未設定）</option>' + [...list, ...extra].map((e) => `<option value="${e.id}"${e.id === sel ? ' selected' : ''}>${esc(e.entry_name)}（2fRATE ${Number(e.frate).toFixed(3)}${curDiv === 'lime' && e.answers?.lime ? '・Lv14 ' + (e.answers.lime.lv14 ? '希望' : '希望しない') : ''}）</option>`).join('');
+  return '<option value="">（未設定）</option>' + [...list, ...extra].map((e) => `<option value="${e.id}"${e.id === sel ? ' selected' : ''}>${esc(e.entry_name)}（2fRATE ${fmtFrate(e.frate)}${curDiv === 'lime' && e.answers?.lime ? '・Lv14 ' + (e.answers.lime.lv14 === true ? '希望' : e.answers.lime.lv14 === false ? '希望しない' : '未回答') : ''}）</option>`).join('');
 }
 
 function submitState(m, sd) {
@@ -382,7 +454,7 @@ function renderMatches() {
     art.innerHTML = `<header><b>MATCH ${String(no + 1).padStart(2, '0')}</b>
       <div class="btns"><button type="button" class="danger" data-del="${mi}">この対戦カードを削除</button></div></header>
       <div class="row" style="align-items:start"><div style="display:grid;gap:6px"><label>自選曲の上限（譜面定数）<input type="number" step="0.1" min="1" max="15" id="m${mi}cap" data-m="${mi}" data-f="cap" value="${m.cap}"></label>
-        <label style="display:flex;gap:6px;align-items:center;color:var(--fg)"><input type="checkbox" id="m${mi}lv14" data-m="${mi}" data-f="lv14"${m.lv14 ? ' checked' : ''}>Lv14 解禁（上限を超えるレベル14を1曲まで）</label></div>
+        ${m.div === 'lime' ? `<label style="display:flex;gap:6px;align-items:center;color:var(--fg)"><input type="checkbox" id="m${mi}lv14" data-m="${mi}" data-f="lv14"${m.lv14 ? ' checked' : ''}>Lv14 解禁（上限を超えるレベル14を1曲まで）</label>` : ''}</div>
       <div${isMini() ? ' hidden' : ''}><label for="m${mi}kadai">運営課題曲</label><div class="kadai"></div></div>
       <div${isMini() ? ' hidden' : ''}><label for="m${mi}kadai2">運営課題曲2（両者が同じ曲を自選曲にしたときだけ使う）</label><div class="kadai2"></div></div></div>
       <div class="sides"></div><p class="warn" hidden></p>`;
@@ -459,7 +531,7 @@ $('#matchList').addEventListener('change', (e) => {
   const m = matches[+mi];
   if (t.tagName === 'SELECT') { m[t.dataset.sd] = t.value ? +t.value : null; m.lv14 = autoLv14(m.div, m.a, m.b); }
   else if (t.dataset.f === 'cap') m.cap = Number(t.value) || m.cap;
-  else if (t.dataset.f === 'lv14') m.lv14 = t.checked;
+  else if (t.dataset.f === 'lv14') m.lv14 = m.div === 'lime' && t.checked;
   else if (t.type === 'radio') {
     const f = t.dataset.f, v = +t.value;
     m[f] = v; m.edited = true;

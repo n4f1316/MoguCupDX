@@ -31,6 +31,62 @@ function renderInfo(s, count) {
   $('#fPhase').textContent = PHASE_LABEL[s.phase] || s.phase;
   $('#fPhaseNote').textContent = s.phaseNote || '';
   $('#notice').hidden = !s.notice; $('#notice').textContent = s.notice || '';
+  if (s.form) applyForm(s.form);
+}
+
+// ---------- 申請の設問（運営が必須／任意／非表示や追加の設問を決める） ----------
+let FORM = { q: {}, custom: [] };
+let formSig = '';
+const qMode = (k) => FORM.q[k] || 'required';
+const tagHtml = (mode) => (mode === 'required' ? '<i>必須</i>' : '<i class="opt">任意</i>');
+function customHtml(c) {
+  const head = `<b>Q.</b> ${esc(c.label)} ${tagHtml(c.mode)}`;
+  const note = c.note ? `<small>${esc(c.note)}</small>` : '';
+  const name = 'cq_' + c.id;
+  if (c.type === 'choice' || c.type === 'multi') {
+    const t = c.type === 'choice' ? 'radio' : 'checkbox';
+    const opts = c.options.map((o) => `<label><input type="${t}" name="${name}" value="${esc(o)}">${esc(o)}</label>`).join('');
+    return `<fieldset class="q" data-cq="${c.id}"><legend>${head}</legend>${note}<div class="checks">${opts}</div></fieldset>`;
+  }
+  const input = c.type === 'number'
+    ? `<input id="${name}" type="number" inputmode="decimal" step="any">`
+    : `<input id="${name}" type="text" maxlength="500">`;
+  return `<label class="q" data-cq="${c.id}"><span>${head}</span>${note}${input}</label>`;
+}
+function applyForm(form) {
+  const sig = JSON.stringify(form);
+  if (sig === formSig) return;
+  formSig = sig; FORM = { q: form.q || {}, custom: form.custom || [] };
+  document.querySelectorAll('#entryForm [data-q]').forEach((el) => {
+    const m = qMode(el.dataset.q);
+    el.hidden = m === 'hidden';
+    el.dataset.off = m === 'hidden' ? '1' : '';
+    const tag = el.querySelector(':scope > span > i, :scope > legend > i');
+    if (tag) tag.outerHTML = tagHtml(m);
+  });
+  const slot = { '': '#qCustom', lime: '#qCustomLime', lemon: '#qCustomLemon' };
+  for (const [div, sel] of Object.entries(slot)) {
+    $(sel).innerHTML = FORM.custom.filter((c) => c.mode !== 'hidden' && (c.div || '') === div).map(customHtml).join('');
+  }
+  // 見えている設問だけで番号を振り直す
+  let n = 0;
+  document.querySelectorAll('#entryForm .q').forEach((el) => {
+    if (el.dataset.off === '1') return;
+    const b = el.querySelector(':scope > span > b, :scope > legend > b');
+    if (b) { n++; b.textContent = `Q${n}.`; el.dataset.no = 'Q' + n; }
+  });
+}
+const qNo = (sel) => document.querySelector('#entryForm ' + sel)?.dataset.no || '';
+function customAnswers(divisions) {
+  const out = {};
+  for (const c of FORM.custom) {
+    if (c.mode === 'hidden' || (c.div && !divisions.includes(c.div))) continue;
+    const name = 'cq_' + c.id;
+    if (c.type === 'choice') out[c.id] = document.querySelector(`input[name="${name}"]:checked`)?.value ?? '';
+    else if (c.type === 'multi') out[c.id] = [...document.querySelectorAll(`input[name="${name}"]:checked`)].map((x) => x.value);
+    else out[c.id] = ($('#' + name)?.value ?? '').trim();
+  }
+  return out;
 }
 
 // ---------- ログイン ----------
@@ -87,26 +143,41 @@ $('#entryForm').addEventListener('submit', async (e) => {
   const lv14 = document.querySelector('input[name=lv14]:checked')?.value;
   const v = {
     xId: $('#xId').value.trim().replace(/^@/, ''), entryName: $('#entryName').value.trim(),
-    rating: Number($('#rating').value), frate: Number($('#frate').value), website: $('#website').value,
+    rating: $('#rating').value === '' ? null : Number($('#rating').value),
+    frate: $('#frate').value === '' ? null : Number($('#frate').value), website: $('#website').value,
     answers: {
       discord: $('#discord').value.trim(), divisions,
       plates: [...document.querySelectorAll('input[name=plate]:checked')].map((x) => x.value),
       lime: divisions.includes('lime') ? { m5: intOf('m5'), r5: intOf('r5'), s6: intOf('s6'), lv14: lv14 === 'yes' ? true : lv14 === 'no' ? false : null } : undefined,
       lemon: divisions.includes('lemon') ? { ap14: intOf('ap14'), ap14p: intOf('ap14p') } : undefined,
+      custom: customAnswers(divisions),
     },
   };
   const need = (ok, msg) => { if (!ok) { setMsg(msg, 'err'); return true; } return false; };
   const isCount = (n) => Number.isInteger(n) && n >= 0;
-  if (need(/^[A-Za-z0-9_]{1,15}$/.test(v.xId), 'Q1：X の ID は英数字と _ の15文字以内で入力してください')) return;
-  if (need(v.answers.discord, 'Q2：Discord で使用している名前を入力してください')) return;
-  if (need(v.entryName, 'Q3：スコアタで使用する名前を入力してください')) return;
-  if (need(divisions.length, 'Q4：参加したい部門を1つ以上選んでください')) return;
-  if (need($('#rating').value !== '' && Number.isInteger(v.rating), 'Q5：現在のレートを整数で入力してください')) return;
-  if (need($('#frate').value !== '' && Number.isFinite(v.frate), 'Q6：2fRATE を入力してください')) return;
+  const req = (k) => qMode(k) === 'required';
+  const on = (k) => qMode(k) !== 'hidden';
+  // 必須なら空欄不可、任意なら空欄可（入っていれば形式だけ確かめる）
+  const okCount = (k, n) => (!on(k) || n === null ? !req(k) : isCount(n));
+  const tag = (k) => qNo(`[data-q="${k}"]`) + '：';
+  if (on('xId') && (v.xId || req('xId')) && need(/^[A-Za-z0-9_]{1,15}$/.test(v.xId), tag('xId') + 'X の ID は英数字と _ の15文字以内で入力してください')) return;
+  if (!on('xId')) v.xId = '';
+  if (req('discord') && need(v.answers.discord, tag('discord') + 'Discord で使用している名前を入力してください')) return;
+  if (need(v.entryName, 'スコアタで使用する名前を入力してください')) return;
+  if (need(divisions.length, '参加したい部門を1つ以上選んでください')) return;
+  if (!on('rating')) v.rating = null;
+  if (!on('frate')) v.frate = null;
+  if (need(v.rating === null ? !req('rating') : Number.isInteger(v.rating), tag('rating') + '現在のレートを整数で入力してください')) return;
+  if (need(v.frate === null ? !req('frate') : Number.isFinite(v.frate), tag('frate') + '2fRATE を入力してください')) return;
   const l = v.answers.lime, m = v.answers.lemon;
-  if (l && need(isCount(l.m5) && isCount(l.r5) && isCount(l.s6), '【らいむ部門】Q8〜Q10 を0以上の整数で入力してください')) return;
-  if (l && need(l.lv14 !== null, '【らいむ部門】Q11 を選んでください')) return;
-  if (m && need(isCount(m.ap14) && isCount(m.ap14p), '【れもん部門】Q12・Q13 を0以上の整数で入力してください')) return;
+  if (l && need(okCount('m5', l.m5) && okCount('r5', l.r5) && okCount('s6', l.s6), '【らいむ部門】星5・星6の達成譜面数を0以上の整数で入力してください')) return;
+  if (l && req('lv14') && need(l.lv14 !== null, '【らいむ部門】' + tag('lv14') + 'レベル14の希望を選んでください')) return;
+  if (m && need(okCount('ap14', m.ap14) && okCount('ap14p', m.ap14p), '【れもん部門】AP 達成譜面数を0以上の整数で入力してください')) return;
+  for (const c of FORM.custom) {
+    if (!(c.id in v.answers.custom) || c.mode !== 'required') continue;
+    const x = v.answers.custom[c.id];
+    if (need(Array.isArray(x) ? x.length : x !== '', `${qNo(`[data-cq="${c.id}"]`)}：「${c.label}」に答えてください`)) return;
+  }
   if (v.website) return;
   const btn = $('#entryForm button[type=submit]'); btn.disabled = true;
   try {
@@ -131,13 +202,19 @@ function prefill2f(p) {
 function entryFacts(en) {
   const a = en.answers || {};
   const rows = [
-    ['X', '@' + en.xId], ['Discord', a.discord || '-'], ['名前', en.entryName],
+    ['X', en.xId ? '@' + en.xId : '-'], ['Discord', a.discord || '-'], ['名前', en.entryName],
     ['部門', { html: (a.divisions || []).map((d) => divPill(d)).join(' ') || '-' }],
-    ['レート', en.rating], ['2fRATE', Number(en.frate).toFixed(3)],
+    ['レート', en.rating >= 0 ? en.rating : '-'], ['2fRATE', en.frate >= 0 ? Number(en.frate).toFixed(3) : '-'],
     ['神プレート', (a.plates || []).map((p) => p + '神').join(' ') || 'なし'],
   ];
-  if (a.lime) rows.push([{ html: divPill('lime') }, `MAS星5 ${a.lime.m5}・Re:MAS星5 ${a.lime.r5}・星6 ${a.lime.s6}・Lv14 ${a.lime.lv14 ? '希望する' : '希望しない'}`]);
-  if (a.lemon) rows.push([{ html: divPill('lemon') }, `Lv14 AP ${a.lemon.ap14}・Lv14+ AP ${a.lemon.ap14p}`]);
+  const nv = (x) => (x === null || x === undefined ? '-' : x);
+  if (a.lime) rows.push([{ html: divPill('lime') }, `MAS星5 ${nv(a.lime.m5)}・Re:MAS星5 ${nv(a.lime.r5)}・星6 ${nv(a.lime.s6)}・Lv14 ${a.lime.lv14 === true ? '希望する' : a.lime.lv14 === false ? '希望しない' : '-'}`]);
+  if (a.lemon) rows.push([{ html: divPill('lemon') }, `Lv14 AP ${nv(a.lemon.ap14)}・Lv14+ AP ${nv(a.lemon.ap14p)}`]);
+  for (const c of FORM.custom) {
+    const x = a.custom?.[c.id];
+    if (x === undefined) continue;
+    rows.push([c.label, Array.isArray(x) ? x.join('、') || '-' : x]);
+  }
   const cell = (v) => (v && v.html !== undefined ? v.html : esc(v));
   return rows.map(([k, v]) => `<dt>${cell(k)}</dt><dd>${cell(v)}</dd>`).join('');
 }
