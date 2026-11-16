@@ -574,11 +574,21 @@ let kind = 'pair';
 let imgDivSel = 'both'; // 'lime' | 'lemon' | 'both'（最初は両部門）
 let imgSel = 'all';     // 'all'（全試合。最初はこれ）または '部門:番号'
 const imgDivs = () => (imgDivSel === 'both' ? DIVISIONS.map((d) => d.id) : [imgDivSel || curDiv]);
+// 告知画像の配色（ライト／ダーク）。このブラウザに覚えておく。ブックマークで作る画像にも同じ配色が渡る
+const IMG_THEME_KEY = 'mogu-img-theme';
+let imgTheme = 'light';
+try { if (localStorage.getItem(IMG_THEME_KEY) === 'dark') imgTheme = 'dark'; } catch { /* 読めなければライト */ }
+$('#imgTheme').value = imgTheme;
+$('#imgTheme').onchange = () => {
+  imgTheme = $('#imgTheme').value;
+  try { localStorage.setItem(IMG_THEME_KEY, imgTheme); } catch { /* 保存できなくても、このページの間は有効 */ }
+  renderImage();
+};
 function viewModel(div = curDiv) {
   readSettingsForm();
   const ch = (k) => (k && charts?.byKey.get(k)) || null;
   return {
-    title: settings.title, badge: divName(div), badgeColor: DIV_COLOR[div], notes: settings.notes,
+    title: settings.title, theme: imgTheme, badge: divName(div), badgeColor: DIV_COLOR[div], notes: settings.notes,
     matches: divMatches(div).map((m) => ({
       aName: nameOf(m.a, 'プレイヤーA'), bName: nameOf(m.b, 'プレイヤーB'),
       aSongs: m.aSongs.map(ch), bSongs: m.bSongs.map(ch), cap: m.cap, lv14: m.lv14,

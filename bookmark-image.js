@@ -6,7 +6,7 @@
   const BASE = (document.currentScript && document.currentScript.src)
     ? new URL('.', document.currentScript.src).href
     : 'https://n4f1316.github.io/MoguCupDX/';
-  const VERSION = '20261110b';
+  const VERSION = '20261116e';
   const KINDS = [['pair', '組み合わせ発表'], ['reveal', '選曲公開'], ['ban', 'BAN結果'], ['final', '対戦曲'], ['result', '結果発表']];
   const KIND_NAME = { pair: '組み合わせ', reveal: '選曲公開', ban: 'BAN結果', final: '対戦曲', result: '結果発表' };
 
@@ -21,7 +21,7 @@
     const font = document.createElement('link');
     font.id = 'mogu-img-font';
     font.rel = 'stylesheet';
-    font.href = 'https://fonts.googleapis.com/css2?family=M+PLUS+Rounded+1c:wght@500;800&family=Zen+Kaku+Gothic+New:wght@400;700&family=JetBrains+Mono:wght@500&display=swap';
+    font.href = 'https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&family=Noto+Sans+JP:wght@400;500;700&display=swap';
     document.head.appendChild(font);
   }
   window.MOGU_ASSETS = BASE;
@@ -43,21 +43,21 @@
 <style>
   :host{all:initial}
   *{box-sizing:border-box}
-  .bg{position:fixed;inset:0;background:rgba(31,45,61,.45);display:flex;justify-content:center;align-items:flex-start;overflow:auto;padding:16px}
-  .panel{width:min(980px,100%);background:#fff;color:#1f2d3d;border-radius:14px;padding:16px;display:grid;gap:12px;
-    font:15px/1.6 "Zen Kaku Gothic New","Hiragino Sans","Noto Sans JP",sans-serif;box-shadow:0 10px 40px rgba(31,45,61,.25)}
-  h1{margin:0;font:800 18px/1.4 "M PLUS Rounded 1c",sans-serif;color:#2a6fb8}
+  .bg{position:fixed;inset:0;background:rgba(18,16,31,.55);display:flex;justify-content:center;align-items:flex-start;overflow:auto;padding:16px}
+  .panel{width:min(980px,100%);background:#F4F5F7;color:#12101F;border:1px solid #D5D6DE;padding:16px;display:grid;gap:12px;
+    font:14px/1.7 "Noto Sans JP","Hiragino Sans","Yu Gothic",sans-serif}
+  h1{margin:0;font:700 18px/1.4 "Chakra Petch","Noto Sans JP",sans-serif;color:#12101F;padding-bottom:6px;border-bottom:2px solid #12101F;flex:1}
   .top{display:flex;justify-content:space-between;align-items:center;gap:8px}
   .row{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
-  button,select{font:inherit;border:1.5px solid #d6e2ee;background:#fff;color:#1f2d3d;border-radius:999px;padding:6px 14px;cursor:pointer}
-  select{border-radius:8px;max-width:100%}
-  button.primary{background:#2a6fb8;border-color:#2a6fb8;color:#fff;font-weight:700}
-  button[aria-pressed="true"]{border-color:#2a6fb8;box-shadow:inset 0 0 0 2px #2a6fb8;font-weight:700}
-  textarea{width:100%;min-height:90px;font:12px/1.5 monospace;border:1.5px solid #d6e2ee;border-radius:8px;padding:8px;color:#1f2d3d;background:#f6f9fd}
-  .note{font-size:13px;color:#5b6f86;margin:0}
+  button,select{font:inherit;font-weight:700;border:1px solid #55516E;background:#F4F5F7;color:#12101F;border-radius:0;padding:6px 14px;cursor:pointer}
+  select{font-weight:400;border-color:#D5D6DE;max-width:100%}
+  button.primary{background:#007A99;border-color:#007A99;color:#F4F5F7}
+  button[aria-pressed="true"]{background:#007A99;border-color:#007A99;color:#F4F5F7}
+  textarea{width:100%;min-height:90px;font:12px/1.5 monospace;border:1px solid #D5D6DE;border-radius:0;padding:8px;color:#12101F;background:#F4F5F7}
+  .note{font-size:13px;color:#55516E;margin:0}
   .msg{font-size:14px;margin:0;min-height:1.4em}
-  .msg.err{color:#d93a49}.msg.ok{color:#2a6fb8}
-  .out{border:1px solid #d6e2ee;border-radius:8px;overflow:hidden;background:#eef5fc}
+  .msg.err{color:#C0303A;font-weight:700}.msg.ok{color:#1E7A3C}
+  .out{border:1px solid #D5D6DE;overflow:hidden;background:#E6E7EC}
   .out img{display:block;width:100%;height:auto}
   [hidden]{display:none!important}
 </style>

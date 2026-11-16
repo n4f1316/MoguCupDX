@@ -353,8 +353,8 @@ function matchImage(m, phase) {
   };
   if (kind === 'result') Object.assign(match, resultRows(m, match.finals));
   const matches = []; matches[m.no - 1] = match; // 画像の MATCH 番号を合わせる
-  const view = { title: ME.settings.title, badge: divName(m.div), badgeColor: DIV_COLOR[m.div], notes: ME.settings.notes || {}, matches };
-  const key = JSON.stringify([kind, match, view.title, view.notes]);
+  const view = { title: ME.settings.title, theme: document.documentElement.dataset.theme, badge: divName(m.div), badgeColor: DIV_COLOR[m.div], notes: ME.settings.notes || {}, matches };
+  const key = JSON.stringify([kind, match, view.title, view.notes, view.theme]);
   const wrap = el('div', 'matchimg');
   if (imgCache.has(key)) { wrap.append(imgCache.get(key)); return wrap; }
   const cv = document.createElement('canvas');

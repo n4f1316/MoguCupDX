@@ -1,20 +1,25 @@
-// 告知画像の描画（canvas）。画像そのものは常に同じ配色（青みのある白＋青）
+// 告知画像の描画（canvas）。2fRATE（α版）と同じデザイン：角は丸めない・影なし・罫線で区切る
+// 配色は view.theme（'light'／'dark'）で選ぶ。指定がなければライト
 // 運営ページ（プレビュー、ジャケットなし）と、maimaidx.jp 上で動く告知画像用ブックマーク（ジャケットあり）の両方で使う。
 // ブックマークでは common.js を読まないので、必要な値はここに持つ。
 var DrawKit = window.DrawKit || (() => {
   // 難易度・種別の色と略称は 2fRATE と同じ
-  const DIFF_COLOR = { BASIC: '#2E9E5B', ADVANCED: '#D98E04', EXPERT: '#E0434B', MASTER: '#8E44D6', 'Re:MASTER': '#B68BE0' };
+  const DIFF_COLOR = { BASIC: '#23804A', ADVANCED: '#A86B00', EXPERT: '#D0343D', MASTER: '#8A3FD1', 'Re:MASTER': '#B68BE0' };
   const DIFF_SHORT = { BASIC: 'BAS', ADVANCED: 'ADV', EXPERT: 'EXP', MASTER: 'MAS', 'Re:MASTER': 'Re:MAS' };
   const fmtConst = (c) => (Math.round(c * 10) / 10).toFixed(1);
   const fmtAch = (a) => (a / 10000).toFixed(4) + '%';
   const fmtNum = (n) => Number(n).toLocaleString('en-US');
   const fmtLoss = (n) => (n ? '-' + fmtNum(n) : '0');
-  const C = { bg1: '#f6f9fd', bg2: '#e4eef8', hole: 'rgba(42,111,184,.06)', card: '#ffffff', card2: '#eef5fc', fg: '#1f2d3d', mute: '#5b6f86', accent: '#2a6fb8', ban: '#d93a49', gold: '#f0b429', goldText: '#9a6400', jk: '#dbe7f3', line: '#d6e2ee', onAccent: '#ffffff' };
-  const FD = '"M PLUS Rounded 1c","Hiragino Maru Gothic ProN",sans-serif';
-  const FB = '"Zen Kaku Gothic New","Hiragino Sans","Noto Sans JP",sans-serif';
-  const FM = '"JetBrains Mono",monospace';
+  const PAL = {
+    light: { bg1: '#F4F5F7', bg2: '#E6E7EC', card: '#F4F5F7', card2: '#E6E7EC', fg: '#12101F', mute: '#55516E', accent: '#007A99', ban: '#C0303A', gold: '#8A5A00', goldText: '#8A5A00', jk: '#D5D6DE', line: '#D5D6DE', onAccent: '#F4F5F7', veil: 'rgba(244,245,247,.72)', dx: '#B8460B', st: '#1565B0', remas: '#6B2FB3', ring: '#B9BBC9', logoAlpha: 0.1 },
+    dark: { bg1: '#0E0B1F', bg2: '#16122E', card: '#0E0B1F', card2: '#16122E', fg: '#F2F0FF', mute: '#A9A3D6', accent: '#4DE1FF', ban: '#FF7A85', gold: '#FFD86B', goldText: '#FFD86B', jk: '#2A2550', line: '#2E2858', onAccent: '#0E0B1F', veil: 'rgba(14,11,31,.72)', dx: '#FFB37A', st: '#7CC4FF', remas: '#D9B8FF', ring: '#2E2858', logoAlpha: 0.1 },
+  };
+  let C = PAL.light;
+  const FD = '"Chakra Petch","Noto Sans JP","Hiragino Sans",sans-serif';
+  const FB = '"Noto Sans JP","Hiragino Sans","Yu Gothic",sans-serif';
+  const FM = '"Chakra Petch","Noto Sans JP",sans-serif';
   const W = 1600;
-  let cv, ctx, V, logo = null;
+  let cv, ctx, V, logo = null, logoInv = null;
   const LOGO_URL = (window.MOGU_ASSETS || '') + 'logo3rd.svg?v=1';
 
   const imgCache = new Map();
@@ -55,7 +60,8 @@ var DrawKit = window.DrawKit || (() => {
     return null;
   }
 
-  function rr(x, y, w, h, r) { ctx.beginPath(); ctx.roundRect(x, y, w, h, r); }
+  // 角は丸めない（r は使わない）
+  function rr(x, y, w, h) { ctx.beginPath(); ctx.rect(x, y, w, h); }
   function fit(text, x, y, maxW, size, weight, font, align = 'left', color = C.fg) {
     let s = size;
     ctx.font = `${weight} ${s}px ${font}`;
@@ -71,24 +77,32 @@ var DrawKit = window.DrawKit || (() => {
     ctx.fillStyle = C.bg2; ctx.fillRect(0, h, W, CREDIT_H);
     ctx.textBaseline = 'alphabetic';
     fit(CREDIT, W / 2, h + 33, W - 160, 20, 500, FB, 'center', C.mute);
-    // 大会アイコンを薄く（85% 透過）背景に敷く
-    if (logo) {
+    // 背景のリング：右上と左下
+    ctx.save(); ctx.beginPath(); ctx.rect(0, 0, W, h); ctx.clip();
+    ctx.strokeStyle = C.ring; ctx.lineWidth = 1.5;
+    [[W - 40, 60, [180, 300, 420, 540]], [60, h - 20, [140, 240, 340]]].forEach(([cx, cy, rs]) => rs.forEach((r, k) => {
+      ctx.globalAlpha = 0.9 - k * 0.2; ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2); ctx.stroke();
+    }));
+    ctx.restore();
+    // 大会アイコンを薄く背景に敷く（ダークでは白黒を反転したもの）
+    const lg = C === PAL.dark ? logoInv || logo : logo;
+    if (lg) {
       const size = Math.min(h - 60, 920);
-      ctx.save(); ctx.globalAlpha = 0.15;
-      ctx.drawImage(logo, (W - size) / 2, (h - size) / 2, size, size);
+      ctx.save(); ctx.globalAlpha = C.logoAlpha;
+      ctx.drawImage(lg, (W - size) / 2, (h - size) / 2, size, size);
       ctx.restore();
     }
     ctx.fillStyle = C.accent; ctx.fillRect(0, 0, W, 10);
     ctx.textBaseline = 'alphabetic';
-    fit(V.title || 'もぐらたたきカップ', 80, 92, 1000, 34, 800, FD, 'left', C.mute);
-    fit(heading, 80, 170, 1000, 72, 800, FD, 'left', C.fg);
+    fit(V.title || 'もぐらたたきカップ', 80, 92, 1000, 34, 700, FD, 'left', C.mute);
+    fit(heading, 80, 170, 1000, 72, 700, FD, 'left', C.fg);
     if (V.badge) { // 右上の丸いラベル：部門名
-      ctx.font = `800 34px ${FD}`;
+      ctx.font = `700 34px ${FD}`;
       const tw = Math.min(ctx.measureText(V.badge).width + 56, 420);
       rr(W - 80 - tw, 112, tw, 64, 32); ctx.fillStyle = V.badgeColor || C.accent; ctx.fill();
-      fit(V.badge, W - 80 - tw / 2, 156, tw - 40, 34, 800, FD, 'center', V.badgeColor ? C.fg : C.onAccent);
+      fit(V.badge, W - 80 - tw / 2, 156, tw - 40, 34, 700, FD, 'center', V.badgeColor ? '#12101F' : C.onAccent);
     }
-    ctx.fillStyle = C.mute; ctx.globalAlpha = 0.35; ctx.fillRect(80, 206, W - 160, 2); ctx.globalAlpha = 1;
+    ctx.fillStyle = C.fg; ctx.fillRect(80, 204, W - 160, 4);
   }
   // 左下に運営の一言（権利表記は一番下の帯）
   function footer(h, text) { if (text) fit(text, 80, h - 34, W - 160, 26, 700, FB, 'left', C.mute); }
@@ -98,23 +112,22 @@ var DrawKit = window.DrawKit || (() => {
   // 2fRATE と同じ形のチップ：[MAS] [ST] [13.7]
   function chips(s, x, y, room) {
     const items = [
-      { t: DIFF_SHORT[s.diff] || s.diff, bg: s.diff === 'Re:MASTER' ? '#ffffff' : DIFF_COLOR[s.diff] || C.mute, fg: s.diff === 'Re:MASTER' ? '#8E44D6' : '#ffffff', border: s.diff === 'Re:MASTER' ? '#B68BE0' : null },
-      { t: s.kind, bg: s.kind === 'DX' ? 'dx' : '#3B82C4', fg: '#ffffff' },
-      { t: fmtConst(s.c), bg: '#EFECF9', fg: C.fg },
+      // BAS〜MAS は塗り、Re:MAS・DX／ST・定数は枠線だけ
+      s.diff === 'Re:MASTER' ? { t: 'Re:MAS', fg: C.remas, border: C.remas } : { t: DIFF_SHORT[s.diff] || s.diff, bg: DIFF_COLOR[s.diff] || C.mute, fg: '#ffffff' },
+      { t: s.kind, fg: s.kind === 'DX' ? C.dx : C.st, border: s.kind === 'DX' ? C.dx : C.st },
+      { t: fmtConst(s.c), fg: C.fg, border: C.mute },
     ];
     let fs = 22;
     const pad = () => Math.round(fs * 0.45), gap = () => Math.round(fs * 0.3);
-    const widths = () => items.map((it) => { ctx.font = `800 ${fs}px ${FM}`; return ctx.measureText(it.t).width + pad() * 2; });
+    const widths = () => items.map((it) => { ctx.font = `700 ${fs}px ${FM}`; return ctx.measureText(it.t).width + pad() * 2; });
     let ws = widths();
     while (ws.reduce((a, b) => a + b, 0) + gap() * 2 > room && fs > 14) { fs--; ws = widths(); }
     const h = Math.round(fs * 1.5);
     let cx = x;
     items.forEach((it, i) => {
-      rr(cx, y, ws[i], h, 7);
-      if (it.bg === 'dx') { const g = ctx.createLinearGradient(cx, 0, cx + ws[i], 0); g.addColorStop(0, '#E0348C'); g.addColorStop(1, '#F29A2E'); ctx.fillStyle = g; } else ctx.fillStyle = it.bg;
-      ctx.fill();
-      if (it.border) { ctx.lineWidth = 2; ctx.strokeStyle = it.border; ctx.stroke(); }
-      ctx.font = `800 ${fs}px ${FM}`; ctx.fillStyle = it.fg; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      if (it.bg) { rr(cx, y, ws[i], h); ctx.fillStyle = it.bg; ctx.fill(); }
+      if (it.border) { rr(cx + 1, y + 1, ws[i] - 2, h - 2); ctx.lineWidth = 2; ctx.strokeStyle = it.border; ctx.stroke(); }
+      ctx.font = `700 ${fs}px ${FM}`; ctx.fillStyle = it.fg; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
       ctx.fillText(it.t, cx + ws[i] / 2, y + h / 2 + 1);
       ctx.textBaseline = 'alphabetic';
       cx += ws[i] + gap();
@@ -169,27 +182,27 @@ var DrawKit = window.DrawKit || (() => {
     ctx.fillStyle = C.jk; ctx.fillRect(jx, jy, js, js);
     const im = s && opt.img;
     if (im) ctx.drawImage(im, jx, jy, js, js);
-    else { ctx.font = `800 ${js * 0.3}px ${FD}`; ctx.fillStyle = C.mute; ctx.textAlign = 'center'; ctx.fillText('?', jx + js / 2, jy + js * 0.62); }
+    else { ctx.font = `700 ${js * 0.3}px ${FD}`; ctx.fillStyle = C.mute; ctx.textAlign = 'center'; ctx.fillText('?', jx + js / 2, jy + js * 0.62); }
     ctx.restore();
     const tx = jx + js + 22, tw = x + w - tx - 20;
     if (s) chips(s, tx, y + 14, tw - (opt.tag ? 150 : 0));
     if (opt.tag) {
-      ctx.font = `800 22px ${FD}`;
+      ctx.font = `700 22px ${FD}`;
       const tgw = ctx.measureText(opt.tag).width + 28;
       rr(x + w - tgw - 16, y + 14, tgw, 36, 18); ctx.fillStyle = C.gold; ctx.fill();
-      ctx.fillStyle = C.fg; ctx.textAlign = 'center'; ctx.fillText(opt.tag, x + w - 16 - tgw / 2, y + 40);
+      ctx.fillStyle = C.bg1; ctx.textAlign = 'center'; ctx.fillText(opt.tag, x + w - 16 - tgw / 2, y + 40);
     }
     // 曲名：長いときは折り返して複数行にする（入りきらなければ文字を小さくする）
     title(s ? s.name : (opt.empty || '（未入力）'), tx, y + 60, tw, y + h - 12 - (y + 60), s ? C.fg : C.mute);
     if (opt.ban) {
-      ctx.fillStyle = 'rgba(246,249,253,.72)'; rr(x, y, w, h, 14); ctx.fill();
+      ctx.fillStyle = C.veil; rr(x, y, w, h, 14); ctx.fill();
       ctx.strokeStyle = C.ban; ctx.lineWidth = 5;
       ctx.beginPath(); ctx.moveTo(x + 30, y + h / 2 + 6); ctx.lineTo(x + w - 30, y + h / 2 - 6); ctx.stroke();
       ctx.save(); ctx.translate(x + w / 2, y + h / 2); ctx.rotate(-0.08);
-      ctx.font = `800 46px ${FD}`;
+      ctx.font = `700 46px ${FD}`;
       const bw = ctx.measureText('BAN').width + 44;
       rr(-bw / 2, -34, bw, 68, 10); ctx.fillStyle = C.ban; ctx.fill();
-      ctx.fillStyle = '#fff'; ctx.textAlign = 'center'; ctx.fillText('BAN', 0, 17); ctx.restore();
+      ctx.fillStyle = C.bg1; ctx.textAlign = 'center'; ctx.fillText('BAN', 0, 17); ctx.restore();
     }
   }
 
@@ -201,9 +214,9 @@ var DrawKit = window.DrawKit || (() => {
       const y = 250 + i * (rowH + gap);
       rr(80, y, W - 160, rowH, 16); ctx.fillStyle = C.card; ctx.fill(); ctx.lineWidth = 1.5; ctx.strokeStyle = C.line; ctx.stroke();
       ctx.font = `500 24px ${FM}`; ctx.fillStyle = C.accent; ctx.textAlign = 'left'; ctx.fillText(label(i + 1), 116, y + 62);
-      fit(m.aName, W / 2 - 90, y + 68, 520, 48, 800, FD, 'right');
-      fit(m.bName, W / 2 + 90, y + 68, 520, 48, 800, FD, 'left');
-      ctx.font = `800 40px ${FD}`; ctx.fillStyle = C.accent; ctx.textAlign = 'center'; ctx.fillText('VS', W / 2, y + 66);
+      fit(m.aName, W / 2 - 90, y + 68, 520, 48, 700, FD, 'right');
+      fit(m.bName, W / 2 + 90, y + 68, 520, 48, 700, FD, 'left');
+      ctx.font = `700 40px ${FD}`; ctx.fillStyle = C.accent; ctx.textAlign = 'center'; ctx.fillText('VS', W / 2, y + 66);
     });
     if (!n) fit('対戦カードがまだありません', W / 2, 320, 800, 36, 700, FB, 'center', C.mute);
     footer(h, V.notes.pair);
@@ -215,7 +228,7 @@ var DrawKit = window.DrawKit || (() => {
       const songs = m[sd + 'Songs'], ban = m[sd + 'Ban'], pick = m[sd + 'Pick'];
       ctx.font = `500 22px ${FM}`; ctx.fillStyle = C.mute; ctx.textAlign = 'left';
       ctx.fillText(sd === 'a' ? 'PLAYER A' : 'PLAYER B', x, top - 50);
-      fit(m[sd + 'Name'] + ' の自選曲', x, top - 12, colW, 40, 800, FD, 'left');
+      fit(m[sd + 'Name'] + ' の自選曲', x, top - 12, colW, 40, 700, FD, 'left');
       songs.forEach((s, i) => {
         const o = { img: s && imgs.get(s.key) };
         if (mode === 'final' || mode === 'ban') { if (ban === i) o.ban = true; }
@@ -223,7 +236,7 @@ var DrawKit = window.DrawKit || (() => {
         songCard(s, x, top + 18 + i * (cardH + 16), colW, cardH, o);
       });
     });
-    ctx.font = `800 56px ${FD}`; ctx.fillStyle = C.accent; ctx.textAlign = 'center';
+    ctx.font = `700 56px ${FD}`; ctx.fillStyle = C.accent; ctx.textAlign = 'center';
     ctx.fillText('VS', W / 2, top + 18 + (cardH * 3 + 32) / 2 + 20);
     if (m.cap != null) fit(`上限 定数${fmtConst(Number(m.cap))}${m.lv14 ? '＋Lv14 1曲' : ''}`, W - 80, top - 50, 520, 22, 500, FM, 'right', m.lv14 ? C.goldText : C.mute);
     return top + 18 + 3 * (cardH + 16);
@@ -234,7 +247,7 @@ var DrawKit = window.DrawKit || (() => {
     base(h, `選曲公開　${label(i + 1)}`);
     const y = columns(m, 'reveal', imgs);
     rr(80, y + 20, W - 160, 96, 16); ctx.fillStyle = C.card2; ctx.fill(); ctx.lineWidth = 1.5; ctx.strokeStyle = C.accent; ctx.stroke();
-    fit('相手の自選曲から1曲をBANしてください', W / 2, y + 82, W - 240, 38, 800, FD, 'center', C.accent);
+    fit('相手の自選曲から1曲をBANしてください', W / 2, y + 82, W - 240, 38, 700, FD, 'center', C.accent);
     footer(h, V.notes.reveal);
   }
 
@@ -244,7 +257,7 @@ var DrawKit = window.DrawKit || (() => {
     base(h, `BAN結果　${label(i + 1)}`);
     const y = columns(m, 'ban', imgs);
     rr(80, y + 20, W - 160, 96, 16); ctx.fillStyle = C.card2; ctx.fill(); ctx.lineWidth = 1.5; ctx.strokeStyle = C.accent; ctx.stroke();
-    fit('BANされなかった2曲から自選曲を1曲選んでください', W / 2, y + 82, W - 240, 38, 800, FD, 'center', C.accent);
+    fit('BANされなかった2曲から自選曲を1曲選んでください', W / 2, y + 82, W - 240, 38, 700, FD, 'center', C.accent);
     footer(h, V.notes.ban);
   }
 
@@ -252,8 +265,8 @@ var DrawKit = window.DrawKit || (() => {
     const h = 1210;
     base(h, `対戦曲決定　${label(i + 1)}`);
     const y = columns(m, 'final', imgs) + 20;
-    ctx.fillStyle = C.mute; ctx.globalAlpha = 0.35; ctx.fillRect(80, y, W - 160, 2); ctx.globalAlpha = 1;
-    fit('対戦曲', 80, y + 60, 400, 40, 800, FD, 'left', C.fg);
+    ctx.fillStyle = C.fg; ctx.fillRect(80, y, W - 160, 2);
+    fit('対戦曲', 80, y + 60, 400, 40, 700, FD, 'left', C.fg);
     const n = m.finals.length, ch = 170, cy = y + 124;
     const cw = (W - 160 - 20 * (n - 1)) / n;
     m.finals.forEach((f, k) => {
@@ -276,21 +289,21 @@ var DrawKit = window.DrawKit || (() => {
     // 上段：両者の名前・合計・勝敗
     const panel = (side, x) => {
       const win = sc.winner === side, draw = sc.winner === 'draw', s1 = sc[side] || {};
-      rr(x, 228, 640, 176, 18); ctx.fillStyle = win ? '#fff8e6' : C.card; ctx.fill();
+      rr(x, 228, 640, 176, 18); ctx.fillStyle = win ? C.card2 : C.card; ctx.fill();
       ctx.lineWidth = win ? 4 : 1.5; ctx.strokeStyle = win ? C.gold : C.line; ctx.stroke();
-      fit(side === 'a' ? m.aName : m.bName, x + 28, 286, 420, 40, 800, FD, 'left', C.fg);
+      fit(side === 'a' ? m.aName : m.bName, x + 28, 286, 420, 40, 700, FD, 'left', C.fg);
       const total = s1.done ? (dx ? fmtLoss(s1.total) : fmtAch(s1.total)) : s1.missing ? `未提出 ${s1.missing}曲` : '集計中';
-      fit(total, x + 28, 370, 600, 58, 800, FM, 'left', s1.done ? C.fg : C.mute);
+      fit(total, x + 28, 370, 600, 58, 700, FM, 'left', s1.done ? C.fg : C.mute);
       const tag = sc.winner ? (draw ? 'DRAW' : win ? 'WIN' : 'LOSE') : '';
       if (tag) {
-        ctx.font = `800 34px ${FD}`;
+        ctx.font = `700 34px ${FD}`;
         const tw = ctx.measureText(tag).width + 40;
         rr(x + 640 - tw - 22, 250, tw, 54, 27); ctx.fillStyle = win ? C.gold : draw ? C.accent : C.jk; ctx.fill();
-        ctx.fillStyle = win ? C.fg : draw ? C.onAccent : C.mute; ctx.textAlign = 'center'; ctx.fillText(tag, x + 640 - 22 - tw / 2, 289);
+        ctx.fillStyle = win ? C.bg1 : draw ? C.onAccent : C.mute; ctx.textAlign = 'center'; ctx.fillText(tag, x + 640 - 22 - tw / 2, 289);
       }
     };
     panel('a', 80); panel('b', 880);
-    fit('VS', W / 2, 336, 120, 52, 800, FD, 'center', C.accent);
+    fit('VS', W / 2, 336, 120, 52, 700, FD, 'center', C.accent);
     if (sc.manual) fit('運営判定', W / 2, 380, 120, 20, 700, FB, 'center', C.mute);
     fit(dx ? '失点（MAX − でらっくスコア ＋ CRITICAL PERFECT 以外の BREAK × 2）の合計が少ない方の勝ち' : '達成率の合計が高い方の勝ち', W / 2, top, W - 160, 22, 700, FB, 'center', C.mute);
     // 対戦曲ごと
@@ -309,10 +322,10 @@ var DrawKit = window.DrawKit || (() => {
       const va = val(row.a), vb = val(row.b);
       const better = va && vb ? (va.v === vb.v ? '' : (dx ? va.v < vb.v : va.v > vb.v) ? 'a' : 'b') : '';
       const box = (v, x, side) => {
-        rr(x, y, 440, rh, 16); ctx.fillStyle = better === side ? '#fff8e6' : C.card; ctx.fill();
+        rr(x, y, 440, rh, 16); ctx.fillStyle = better === side ? C.card2 : C.card; ctx.fill();
         ctx.lineWidth = better === side ? 3 : 1.5; ctx.strokeStyle = better === side ? C.gold : C.line; ctx.stroke();
         if (!v) { fit('未提出', x + 220, y + rh / 2 + 12, 400, 32, 700, FB, 'center', C.mute); return; }
-        fit(v.big, x + 220, y + (v.small ? 72 : 90), 400, 44, 800, FM, 'center', C.fg);
+        fit(v.big, x + 220, y + (v.small ? 72 : 90), 400, 44, 700, FM, 'center', C.fg);
         if (v.small) fit(v.small, x + 220, y + 118, 400, 26, 700, FB, 'center', C.mute);
       };
       box(va, 80, 'a'); box(vb, 1080, 'b');
@@ -321,7 +334,19 @@ var DrawKit = window.DrawKit || (() => {
     footer(h, V.notes.result);
   }
 
-  // view: { title, badge, notes, matches:[{ aName, bName, aSongs, bSongs, aBan, aPick, bBan, bPick, cap, finals:[{ s, label, kind }] }] }
+  // ロゴの白黒を反転した画像を作る（ダーク用）。透明な部分は透明のまま
+  function invert(im) {
+    try {
+      const c = document.createElement('canvas'); c.width = c.height = 920;
+      const x = c.getContext('2d');
+      x.drawImage(im, 0, 0, 920, 920);
+      x.globalCompositeOperation = 'difference'; x.fillStyle = '#fff'; x.fillRect(0, 0, 920, 920);
+      x.globalCompositeOperation = 'destination-in'; x.drawImage(im, 0, 0, 920, 920);
+      return c;
+    } catch { return null; }
+  }
+
+  // view: { title, theme, badge, notes, matches:[{ aName, bName, aSongs, bSongs, aBan, aPick, bBan, bPick, cap, finals:[{ s, label, kind }] }] }
   // 描画は1枚ずつ順番に行う（同時に呼ばれても描き先が混ざらないように）
   let queue = Promise.resolve();
   function render(canvas, view, kind, idx, opt = {}) {
@@ -331,8 +356,10 @@ var DrawKit = window.DrawKit || (() => {
   }
   async function renderOne(canvas, view, kind, idx, opt) {
     cv = canvas; ctx = cv.getContext('2d'); V = view;
+    C = view.theme === 'dark' ? PAL.dark : PAL.light;
     if (!logo) logo = await loadImg(LOGO_URL);
-    await Promise.all([`800 40px ${FD}`, `700 40px ${FB}`, `500 22px ${FM}`].map((f) => document.fonts.load(f, 'もぐらA'))).catch(() => {});
+    if (logo && !logoInv) logoInv = invert(logo);
+    await Promise.all([`700 40px ${FD}`, `700 40px ${FB}`, `500 22px ${FM}`].map((f) => document.fonts.load(f, 'もぐらA'))).catch(() => {});
     if (kind === 'pair') { drawPair(); return; }
     const m = V.matches[idx];
     if (!m) { base(400, '対戦カードがありません'); return; }
