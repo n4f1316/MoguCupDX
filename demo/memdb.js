@@ -99,6 +99,13 @@ export function makeDB(data, onWrite) {
     'DELETE FROM results WHERE match_id=? AND entry_id=? AND slot=?': ([m, e, sl]) => { T.results = T.results.filter((x) => !rKey(m, e, sl)(x)); return { write: true }; },
     'DELETE FROM results WHERE entry_id=?': ([e]) => { T.results = T.results.filter((x) => x.entry_id !== e); return { write: true }; },
 
+    // バックアップ用
+    'SELECT * FROM entries ORDER BY id': () => ({ rows: T.entries.map((e) => ({ ...e })) }),
+    'SELECT id, username, source, created_at, profile FROM users ORDER BY id': () => ({ rows: T.users.map(({ id, username, source, created_at, profile }) => ({ id, username, source, created_at, profile })) }),
+    'SELECT key, value, updated_at FROM kv': () => ({ rows: T.kv.map((x) => ({ ...x })) }),
+    'SELECT match_id, entry_id, slot, song_key, dx, dx_max, brk, ach, status, reason, submitted_at, reviewed_at, reviewer, ver, length(image) AS img FROM results': () => ({
+      rows: T.results.map(({ image, ...r }) => ({ ...r, img: (image || '').length })),
+    }),
     'SELECT value FROM kv WHERE key=?': ([k]) => ({ rows: T.kv.filter((x) => x.key === k).map((x) => ({ value: x.value })) }),
     "INSERT INTO kv (key, value, updated_at) VALUES (?, ?, datetime('now')) ON CONFLICT(key) DO UPDATE SET value=excluded.value, updated_at=excluded.updated_at": ([k, v]) => {
       const r = T.kv.find((x) => x.key === k);

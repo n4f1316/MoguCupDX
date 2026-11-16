@@ -160,6 +160,10 @@ td input{padding:3px 6px;font-size:14px}
       <label>BAN結果<input id="nBan" type="text"></label>
       <label>対戦曲<input id="nFinal" type="text"></label>
       <label>結果発表<input id="nResult" type="text"></label>
+      <h2>バックアップ</h2>
+      <p class="note">申請・ユーザー名・設定・対戦カード・自選曲と BAN・リザルトを、1つのファイル（JSON）にまとめて保存します。段階を進める前や、参加者を削除する前に取っておくと安心です。PIN は含まれません。申請内容が入っているので、ファイルは公開しないでください。</p>
+      <label style="display:flex;gap:8px;align-items:center;color:var(--fg);font-size:14px"><input id="bkImages" type="checkbox">リザルト画像も含める（ファイルが大きくなり、時間がかかります）</label>
+      <div class="btns"><button type="button" id="backup">全データを保存する</button><span class="note" id="bkNote"></span></div>
     </section>
 
     <section class="panel" data-pane="matches" hidden>
@@ -233,6 +237,6 @@ td input{padding:3px 6px;font-size:14px}
 <script src="config.js?v=20261110b"></script>
 <script src="common.js?v=20261110b"></script>
 <script src="draw.js?v=20261116e"></script>
-<script src="admin.js?v=20261116e"></script>
+<script src="admin.js?v=20261116f"></script>
 </body>
 </html>

@@ -23,6 +23,7 @@
 //   PUT    /api/admin/state          { settings?, matches? }
 //   PUT    /api/admin/picks          { items: [{ match_id, entry_id, songs, ban, pick }] }
 //   POST   /api/admin/reset-pin      { username }  このツールで作ったユーザーの仮PINを発行
+//   GET    /api/admin/backup         全データの書き出し（PIN とリザルト画像は含めない。画像は result-image で別に取る）
 //   GET    /api/admin/result-image?match_id=&entry_id=&slot=   リザルト画像
 //   PUT    /api/admin/results        { items: [{ match_id, entry_id, slot, status?, dx?, dx_max?, ach?, reason?, remove? }] }
 //
@@ -42,7 +43,7 @@ const JACKET_BASES = [
 const CONSTS_URL = 'https://n4f1316.github.io/dxscore-tools/maimai_consts_magical.json';
 const RATE2F_URL = 'https://2frate.want131611.workers.dev/';
 const SESSION_DAYS = 30;
-const WORKER_VERSION = '2026-11-16a'; // 反映を確かめるための版（/api/public に出る）
+const WORKER_VERSION = '2026-11-16b'; // 反映を確かめるための版（/api/public に出る）
 const PHASES = ['closed', 'select', 'ban', 'pick', 'done', 'play', 'result'];
 // 部門ごとの勝敗の決め方
 //   らいむ：失点（MAX − でらっくスコア ＋ CRITICAL PERFECT 以外の BREAK の数×2）の3曲合計が少ない方
@@ -780,6 +781,20 @@ async function admin(req, env, sub, m) {
       if (Object.keys(f).length && it.match_id && Number.isInteger(it.entry_id)) await writePick(env, String(it.match_id), it.entry_id, f);
     }
     return json({ ok: true });
+  }
+  if (sub === 'backup' && m === 'GET') {
+    // PIN（ハッシュ）・ログイン中の情報は入れない。リザルト画像は大きいので有無（文字数）だけ
+    const all = async (sql) => (await env.DB.prepare(sql).all()).results;
+    return json({
+      app: 'mogucup-backup', v: 1, worker: WORKER_VERSION, exportedAt: new Date().toISOString(),
+      tables: {
+        entries: await all('SELECT * FROM entries ORDER BY id'),
+        users: await all('SELECT id, username, source, created_at, profile FROM users ORDER BY id'),
+        kv: await all('SELECT key, value, updated_at FROM kv'),
+        picks: await all('SELECT * FROM picks'),
+        results: await all('SELECT match_id, entry_id, slot, song_key, dx, dx_max, brk, ach, status, reason, submitted_at, reviewed_at, reviewer, ver, length(image) AS img FROM results'),
+      },
+    });
   }
   if (sub === 'result-image' && m === 'GET') {
     const q = new URL(req.url).searchParams;

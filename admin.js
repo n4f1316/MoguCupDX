@@ -247,6 +247,38 @@ $('#csv').onclick = () => {
   setTimeout(() => URL.revokeObjectURL(a.href), 1000);
 };
 
+// ---------- バックアップ：全データを1つの JSON に保存 ----------
+$('#backup').onclick = async () => {
+  const btn = $('#backup'), note = $('#bkNote');
+  btn.disabled = true; note.textContent = '読み込んでいます…';
+  try {
+    const data = await api('api/admin/backup', { key: KEY });
+    const rs = data.tables.results;
+    let failed = 0;
+    if ($('#bkImages').checked) {
+      // 画像は1枚ずつ取る（まとめて取ると大きすぎるため）
+      const withImg = rs.filter((r) => r.img > 0);
+      for (const [i, r] of withImg.entries()) {
+        note.textContent = `リザルト画像を読み込んでいます… ${i + 1} / ${withImg.length}`;
+        try {
+          r.image = (await api(`api/admin/result-image?match_id=${encodeURIComponent(r.match_id)}&entry_id=${r.entry_id}&slot=${r.slot}`, { key: KEY })).image || '';
+        } catch { failed++; }
+      }
+      data.images = failed ? 'partial' : 'included';
+    } else data.images = 'none';
+    const d = new Date(), p2 = (n) => String(n).padStart(2, '0');
+    const name = `mogucup_backup_${d.getFullYear()}${p2(d.getMonth() + 1)}${p2(d.getDate())}_${p2(d.getHours())}${p2(d.getMinutes())}.json`;
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob([JSON.stringify(data)], { type: 'application/json' })); a.download = name; a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+    const t = data.tables;
+    note.textContent = `保存しました：${name}（申請 ${t.entries.length} 件・リザルト ${rs.length} 件${failed ? `・画像 ${failed} 枚は取れませんでした` : ''}）`;
+  } catch (e) {
+    note.textContent = '';
+    setMsg('バックアップを保存できませんでした：' + e.message, 'err');
+  } finally { btn.disabled = false; }
+};
+
 // ---------- 譜面検索 ----------
 // cap：この定数以下だけ候補に出す（null なら制限なし）。lv14：上限を超える Lv14 も候補に出す
 const okFor = (c, cap, lv14) => cap == null || selectable(c, cap, lv14);

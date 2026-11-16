@@ -1,7 +1,7 @@
 // デモモード：本物の worker.js を、ブラウザの中のデータベースにつないで動かす
 // （サーバーには何も送らない。データはこのブラウザの localStorage にだけ保存）
-import worker from '../worker/worker.js?v=demo12';
-import { makeDB, emptyData } from './memdb.js?v=demo10';
+import worker from '../worker/worker.js?v=demo13';
+import { makeDB, emptyData } from './memdb.js?v=demo13';
 
 const STORE = 'mogucupdx-demo-db';
 const ADMIN_KEY = 'demo';
