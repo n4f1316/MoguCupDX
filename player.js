@@ -298,6 +298,7 @@ function rerender(m) {
   if (box) { box.replaceChildren(); renderMatch(box, m, ME.settings.phase); }
 }
 
+let holdTimer = 0;
 const WAIT_MSG = {
   select: '自選曲の受付は終了しました。相手の自選曲の公開まで、しばらくお待ちください。',
   ban: 'BAN の受付は終了しました。BAN の結果の公開まで、しばらくお待ちください。',
@@ -317,7 +318,18 @@ function renderMatch(box, m, phase) {
   if (img) box.append(img);
 
   // 受付を止めている間（運営が次の段階に進めるまで）は、提出の画面の代わりに「お待ちください」を出す
-  const wait = ME.settings.hold && WAIT_MSG[phase];
+  // 段階の締切：過ぎたら、その時点で「公開待ち」に切り替える
+  const pdl = ['select', 'ban', 'pick'].includes(phase) ? ME.settings.phaseDeadline : '';
+  const pdlAt = pdl ? Date.parse(pdl + ':00+09:00') : NaN;
+  const pdlPast = pdlAt <= Date.now();
+  if (pdl) {
+    const f2 = el('dl', 'facts');
+    f2.innerHTML = `<dt>受付の締切</dt><dd>${esc(fmtDeadline(pdl))}${pdlPast ? '　<b>（終了しました）</b>' : ''}</dd>`;
+    box.append(f2);
+    const left = pdlAt - Date.now();
+    if (left > 0 && left < 2 ** 31 - 1) { clearTimeout(holdTimer); holdTimer = setTimeout(refresh, left + 1500); }
+  }
+  const wait = (ME.settings.hold || pdlPast) && WAIT_MSG[phase];
   if (wait && phase !== 'play') {
     box.append(el('h2', '', '公開をお待ちください'));
     box.append(el('p', 'waitmsg', wait));

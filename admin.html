@@ -146,10 +146,12 @@ td input{padding:3px 6px;font-size:14px}
       <div class="row">
         <label>段階（参加者ができること）<select id="sPhase"></select></label>
         <label>段階の一言（締切など。参加者ページに表示）<input id="sPhaseNote" type="text" placeholder="例 10/20 23:59 まで"></label>
+        <label>いまの段階の受付の締切（日本時間。自選曲の提出・BAN・自選曲の決定で有効）<input id="sPhaseDeadline" type="datetime-local"></label>
         <label>リザルト提出の締切（日本時間、空欄なら段階を変えるまで）<input id="sResultDeadline" type="datetime-local"></label>
       </div>
       <label style="display:flex;gap:8px;align-items:center;color:var(--fg);font-size:14px"><input id="sHold" type="checkbox">いまの段階の受付を止めて、次の公開まで待ってもらう（参加者ページに「公開までしばらくお待ちください」と表示）</label>
       <p class="note">段階を切り替えて保存したときに、その段階の内容（相手の自選曲・BAN の結果・対戦曲・対戦結果）が参加者に公開されます。受付だけ先に締めて公開は後にしたいときは、上にチェックを入れて保存してください。公開するときは、段階を次に進めて保存します（段階を変えるとチェックは自動で外れます）。</p>
+      <p class="note">「いまの段階の受付の締切」を入れておくと、その時刻を過ぎたときに自動で受付が止まり、参加者ページが「公開までしばらくお待ちください」に変わります。公開は自動では行われません。段階を変えると、この締切は空に戻ります。</p>
       <p class="note">組み合わせ発表前 → 自選曲の提出 → BAN → 自選曲の決定 → 対戦曲確定 の順に切り替えます。BAN の段階になると、相手の自選曲が参加者に公開されます。</p>
       <h2>新しい対戦カードの既定値（部門ごと）</h2>
       <div id="divDefaults" style="display:grid;gap:12px"></div>
@@ -237,6 +239,6 @@ td input{padding:3px 6px;font-size:14px}
 <script src="config.js?v=20261110b"></script>
 <script src="common.js?v=20261110b"></script>
 <script src="draw.js?v=20261116e"></script>
-<script src="admin.js?v=20261116f"></script>
+<script src="admin.js?v=20261116g"></script>
 </body>
 </html>
