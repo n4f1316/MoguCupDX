@@ -105,6 +105,8 @@ $$('[role=tab]').forEach((b) => (b.onclick = () => {
   $$('[role=tab]').forEach((x) => x.setAttribute('aria-selected', x === b));
   $$('[data-pane]').forEach((p) => (p.hidden = p.dataset.pane !== tab));
   if (tab === 'images') renderImage();
+  // 設問の必須／任意を変えたあとでも、未回答の印が最新になるように描き直す
+  if (tab === 'entries' && editing === null) { readSettingsForm(); renderEntries(); }
 }));
 
 function renderAll() {
@@ -145,8 +147,28 @@ const fmtFrate = (v) => (v >= 0 ? Number(v).toFixed(3) : '-');
 const yesNo = (v) => (v === true ? 'はい' : v === false ? 'いいえ' : '-');
 const customQs = () => settings?.form?.custom || [];
 const customVal = (e, c) => { const v = A(e).custom?.[c.id]; return v === undefined ? '' : Array.isArray(v) ? v.join('、') : String(v); };
-// 運営が足した設問の列は「申請日時」の前に入れる
-const cols = () => COLS.flatMap((c) => (c === 'CUSTOM'
+// 必須の設問のうち、この申請で答えが入っていないもの（設問をあとから必須に変えたときなどに出る）
+const Q_SHORT = { xId: 'X', discord: 'Discord', rating: 'レート', frate: '2fRATE', m5: 'MAS星5', r5: 'Re:MAS星5', s6: '星6', lv14: 'Lv14希望', ap14: 'Lv14 AP', ap14p: 'Lv14+ AP' };
+function missingOf(e) {
+  const f = settings?.form; if (!f) return [];
+  const a = A(e), req = (k) => (f.q?.[k] || 'required') === 'required', none = (v) => v === null || v === undefined || v === '';
+  const out = [];
+  if (req('xId') && !e.x_id) out.push(Q_SHORT.xId);
+  if (req('discord') && !a.discord) out.push(Q_SHORT.discord);
+  if (req('rating') && !(e.rating >= 0)) out.push(Q_SHORT.rating);
+  if (req('frate') && !(e.frate >= 0)) out.push(Q_SHORT.frate);
+  if (inDiv(e, 'lime')) ['m5', 'r5', 's6', 'lv14'].forEach((k) => { if (req(k) && none(a.lime?.[k])) out.push(Q_SHORT[k]); });
+  if (inDiv(e, 'lemon')) ['ap14', 'ap14p'].forEach((k) => { if (req(k) && none(a.lemon?.[k])) out.push(Q_SHORT[k]); });
+  for (const c of f.custom || []) {
+    if (c.mode !== 'required' || (c.div && !inDiv(e, c.div))) continue;
+    const v = a.custom?.[c.id];
+    if (none(v) || (Array.isArray(v) && !v.length)) out.push(c.label);
+  }
+  return out;
+}
+const MISS_COL = ['miss', '必須の未回答', (e) => -missingOf(e).length, (e) => { const m = missingOf(e); return m.length ? `<span class="rstatus st-ng">${esc(m.join('・'))}</span>` : ''; }];
+// 運営が足した設問の列は「申請日時」の前に入れる。未回答の列は、未回答の申請があるときだけ名前の次に出す
+const cols = () => COLS.flatMap((c) => (c !== 'CUSTOM' && c[0] === 'entry_name' && entries.some((e) => missingOf(e).length) ? [c, MISS_COL] : [c])).flatMap((c) => (c === 'CUSTOM'
   ? customQs().map((q) => ['cq_' + q.id, q.label.length > 12 ? q.label.slice(0, 12) + '…' : q.label, (e) => (q.type === 'number' ? Number(A(e).custom?.[q.id] ?? -Infinity) : customVal(e, q)), (e) => esc(customVal(e, q) || '-'), q.type === 'number' ? 1 : 0])
   : [c]));
 const entryById = (id) => entries.find((e) => e.id === id);
@@ -160,6 +182,9 @@ function renderEntries() {
   const shown = entries.filter((e) => entryDiv === 'all' || inDiv(e, entryDiv));
   $('#entryCount').textContent = `（${shown.length}人${entryDiv === 'all' ? '' : '／全' + entries.length + '人'}）`;
   $('#entryDiv').innerHTML = `<option value="all">すべての部門</option>` + DIVISIONS.map((d) => `<option value="${d.id}"${entryDiv === d.id ? ' selected' : ''}>${d.name}（${entries.filter((e) => inDiv(e, d.id)).length}人）</option>`).join('');
+  const missN = entries.filter((e) => missingOf(e).length).length;
+  $('#missNote').hidden = !missN;
+  $('#missNote').textContent = missN ? `必須の設問に未回答の申請が ${missN} 件あります（「必須の未回答」の列）。見出しを押すと、未回答のある申請が上に並びます。レート・2fRATE・X・Discord は「編集」から運営が入力できます。` : '';
   const COLS_ = cols();
   const col = COLS_.find((c) => c[0] === sortKey) || COLS_[0];
   const rows = shown.sort((x, y) => {
@@ -234,12 +259,12 @@ const numOrNull = (v) => (String(v).trim() === '' ? null : Number(v));
 $('#csv').onclick = () => {
   const q = (v) => `"${String(v ?? '').replace(/"/g, '""')}"`;
   const head = ['No.', 'スコアタで使用する名前', 'X', 'Discord', '部門', 'ユーザー', 'レート', '2fRATE', '神プレート',
-    '【らいむ】MASTER星5', '【らいむ】Re:MASTER星5', '【らいむ】星6合計', '【らいむ】Lv14希望', '【れもん】Lv14 AP', '【れもん】Lv14+ AP', ...customQs().map((c) => c.label), '申請日時', 'メモ'];
+    '【らいむ】MASTER星5', '【らいむ】Re:MASTER星5', '【らいむ】星6合計', '【らいむ】Lv14希望', '【れもん】Lv14 AP', '【れもん】Lv14+ AP', ...customQs().map((c) => c.label), '必須の未回答', '申請日時', 'メモ'];
   const rows = entries.filter((e) => entryDiv === 'all' || inDiv(e, entryDiv)).map((e) => {
     const a = A(e);
     return [e.id, e.entry_name, e.x_id ? '@' + e.x_id : '', a.discord, (a.divisions || []).map(divName).join('・'), e.username || '', e.rating >= 0 ? e.rating : '', e.frate >= 0 ? e.frate : '',
       (a.plates || []).map((p) => p + '神').join(' '), a.lime?.m5, a.lime?.r5, a.lime?.s6, a.lime ? yesNo(a.lime.lv14).replace('-', '') : '',
-      a.lemon?.ap14, a.lemon?.ap14p, ...customQs().map((c) => customVal(e, c)), fmtTime(e.created_at), e.memo];
+      a.lemon?.ap14, a.lemon?.ap14p, ...customQs().map((c) => customVal(e, c)), missingOf(e).join('・'), fmtTime(e.created_at), e.memo];
   });
   const lines = [head, ...rows].map((r) => r.map(q).join(','));
   const blob = new Blob(['﻿' + lines.join('\r\n')], { type: 'text/csv' });
