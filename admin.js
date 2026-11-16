@@ -108,6 +108,7 @@ $$('[role=tab]').forEach((b) => (b.onclick = () => {
 }));
 
 function renderAll() {
+  renderPending();
   renderEntries();
   renderSettingsForm();
   renderMatches();
@@ -246,6 +247,53 @@ $('#csv').onclick = () => {
   a.href = URL.createObjectURL(blob); a.download = `mogucup_entries${entryDiv === 'all' ? '' : '_' + entryDiv}.csv`; a.click();
   setTimeout(() => URL.revokeObjectURL(a.href), 1000);
 };
+
+// ---------- まだ提出していない参加者（いまの段階で出すべきものが出ていない人） ----------
+const PEND_WHAT = { select: '自選曲の提出', ban: 'BAN の提出', pick: '自選曲の決定', play: 'リザルトの提出' };
+function pendingList() {
+  const ph = settings?.phase, out = [];
+  if (!PEND_WHAT[ph]) return out;
+  for (const d of DIVISIONS) {
+    divMatches(d.id).forEach((m, i) => {
+      [['a', m.a], ['b', m.b]].forEach(([sd, id]) => {
+        const e = id && entryById(id); if (!e) return;
+        let lack = '';
+        if (ph === 'select') { const n = m[sd + 'Songs'].filter(Boolean).length; if (n < 3) lack = n ? `自選曲があと ${3 - n} 曲` : '自選曲 3曲'; }
+        // 自分の BAN は、相手側（aBan＝B が A の曲に出した BAN）に入っている
+        else if (ph === 'ban') { if (m[(sd === 'a' ? 'b' : 'a') + 'Ban'] < 0) lack = 'BAN'; }
+        else if (ph === 'pick') { if (m[sd + 'Pick'] < 0) lack = '自選曲の決定'; }
+        else {
+          const rs = matchFinals(m).map((_, slot) => resultOf(m.id, id, slot));
+          const none = rs.filter((r) => !r).length, rej = rs.filter((r) => r?.status === 'rejected').length;
+          lack = [none ? `リザルト ${none} 曲` : '', rej ? `差し戻し ${rej} 曲（出し直し待ち）` : ''].filter(Boolean).join('・');
+        }
+        if (lack) out.push({ div: d, no: i + 1, e, lack });
+      });
+    });
+  }
+  return out;
+}
+const pendDeadline = () => (settings.phase === 'play' ? settings.resultDeadline : settings.phaseDeadline) || '';
+const fmtDl = (s) => { const [d, t] = s.split('T'); const [, mo, da] = d.split('-'); return `${+mo}/${+da} ${t}`; };
+function renderPending() {
+  if (!settings) return;
+  const what = PEND_WHAT[settings.phase], list = pendingList();
+  $('#pendCount').textContent = what ? `${list.length} 人` : '';
+  $('#pendNote').textContent = !what ? 'いまの段階（' + (PHASE_LABEL[settings.phase] || settings.phase) + '）では、参加者が提出するものはありません。'
+    : list.length ? `いまの段階：${what}。この一覧は、ページを読み込んだ時点の状況です。`
+      : `いまの段階：${what}。全員が提出済みです（ページを読み込んだ時点）。`;
+  $('#pendTable').innerHTML = list.length ? '<tr><th>部門</th><th>試合</th><th>名前</th><th>Discord</th><th>出ていないもの</th></tr>' + list.map((x) =>
+    `<tr><td>${divPill(x.div.id)}</td><td class="mono">MATCH ${String(x.no).padStart(2, '0')}</td><td>${esc(x.e.entry_name)}</td><td>${esc(A(x.e).discord || '-')}</td><td>${esc(x.lack)}</td></tr>`).join('') : '';
+  $('#pendCopy').hidden = !list.length;
+}
+$('#pendCopy').onclick = async () => {
+  const list = pendingList(), dl = pendDeadline();
+  const text = [`【${PEND_WHAT[settings.phase]}】まだ提出が確認できていない方へのお知らせです。${dl ? `締切は ${fmtDl(dl)} です。` : ''}お手数ですが、参加者ページから提出をお願いします。`,
+    ...list.map((x) => `・${x.e.entry_name}${A(x.e).discord ? `（${A(x.e).discord}）` : ''}　${x.div.name} MATCH ${String(x.no).padStart(2, '0')}：${x.lack}`)].join('\n');
+  try { await navigator.clipboard.writeText(text); setMsg(`連絡用の文面をコピーしました（${list.length} 人）`, 'ok'); }
+  catch { setMsg('コピーできませんでした。ブラウザの設定を確認してください', 'err'); }
+};
+$('#pendReload').onclick = () => $('#reload').click();
 
 // ---------- バックアップ：全データを1つの JSON に保存 ----------
 $('#backup').onclick = async () => {
@@ -442,7 +490,7 @@ $('[data-pane=settings]').addEventListener('input', (e) => {
 });
 $('[data-pane=settings]').addEventListener('change', (e) => {
   if (e.target.id === 'sFormat') { readSettingsForm(); markDirty(); renderSettingsForm(); renderMatches(); return; }
-  if (e.target.id === 'sPhase') { $('#sHold').checked = false; $('#sPhaseDeadline').value = ''; readSettingsForm(); markDirty(); setMsg('段階を変えました。「設定と組み合わせを保存」を押すと参加者のページに反映されます', 'ok'); }
+  if (e.target.id === 'sPhase') { $('#sHold').checked = false; $('#sPhaseDeadline').value = ''; readSettingsForm(); renderPending(); markDirty(); setMsg('段階を変えました。「設定と組み合わせを保存」を押すと参加者のページに反映されます', 'ok'); }
 });
 
 // ---------- 組み合わせ・選曲（部門ごと） ----------
@@ -823,7 +871,7 @@ function resultCell(m, eid, slot, f, metric) {
     try {
       await api('api/admin/results', { method: 'PUT', key: KEY, body: { items: [{ match_id: m.id, entry_id: eid, slot, song_key: f.key, ...item }] } });
       const st2 = await api('api/admin/state', { key: KEY });
-      results = st2.results || [];
+      results = st2.results || []; renderPending();
       renderResults(); if (tab === 'images') renderImage();
       setMsg(done, 'ok');
     } catch (e) { setMsg(e.message, 'err'); }
@@ -850,5 +898,5 @@ function resultCell(m, eid, slot, f, metric) {
 $('#resultDiv')?.addEventListener('change', (e) => { resultDiv = e.target.value; renderResults(); });
 $('#resultPending')?.addEventListener('change', (e) => { resultOnlyPending = e.target.checked; renderResults(); });
 $('#resultReload')?.addEventListener('click', async () => {
-  try { const st = await api('api/admin/state', { key: KEY }); results = st.results || []; renderResults(); setMsg('リザルトを読み込み直しました', 'ok'); } catch (e) { setMsg(e.message, 'err'); }
+  try { const st = await api('api/admin/state', { key: KEY }); results = st.results || []; renderResults(); renderPending(); setMsg('リザルトを読み込み直しました', 'ok'); } catch (e) { setMsg(e.message, 'err'); }
 });
