@@ -298,6 +298,12 @@ function rerender(m) {
   if (box) { box.replaceChildren(); renderMatch(box, m, ME.settings.phase); }
 }
 
+const WAIT_MSG = {
+  select: '自選曲の受付は終了しました。相手の自選曲の公開まで、しばらくお待ちください。',
+  ban: 'BAN の受付は終了しました。BAN の結果の公開まで、しばらくお待ちください。',
+  pick: '自選曲の決定の受付は終了しました。対戦曲の公開まで、しばらくお待ちください。',
+  play: 'リザルトの提出は終了しました。対戦結果の公開まで、しばらくお待ちください。',
+};
 function renderMatch(box, m, phase) {
   const h = el('h2'); h.innerHTML = `${divPill(m.div)} MATCH ${String(m.no).padStart(2, '0')}`; box.append(h);
   const vs = el('div', 'vs');
@@ -310,6 +316,13 @@ function renderMatch(box, m, phase) {
   const img = matchImage(m, phase);
   if (img) box.append(img);
 
+  // 受付を止めている間（運営が次の段階に進めるまで）は、提出の画面の代わりに「お待ちください」を出す
+  const wait = ME.settings.hold && WAIT_MSG[phase];
+  if (wait && phase !== 'play') {
+    box.append(el('h2', '', '公開をお待ちください'));
+    box.append(el('p', 'waitmsg', wait));
+    return;
+  }
   if (phase === 'select') renderSelect(box, m);
   else if (phase === 'ban') renderBan(box, m);
   else if (phase === 'pick') renderPick(box, m);
@@ -542,11 +555,12 @@ function renderPlay(box, m) {
     : 'この部門は、達成率の3曲合計が高い方の勝ちです。曲ごとにリザルト画像を選ぶと、達成率を読み取ります。値を確かめてから提出してください。'));
   box.append(el('p', 'note', '読み取れる画像：でらっくす NET のプレイ履歴（詳細）のスクリーンショット（BREAK まで読めて一番正確）、ゲーム機のリザルト画面の写真、ゲーム機の「大会リザルト」の写真（曲名で対象の曲を探します）。期間中は何度でも出し直せます（出し直すと承認待ちに戻ります）。'));
   const dl = ME.settings.resultDeadline;
-  const closed = dl && Date.now() > Date.parse(dl + ':00+09:00');
+  const past = dl && Date.now() > Date.parse(dl + ':00+09:00');
+  const closed = past || ME.settings.hold;
   const facts = el('dl', 'facts');
-  facts.innerHTML = `<dt>提出の締切</dt><dd>${dl ? esc(fmtDeadline(dl)) : '運営が締め切るまで'}${closed ? '　<b>（終了しました）</b>' : ''}</dd>`;
+  facts.innerHTML = `<dt>提出の締切</dt><dd>${dl ? esc(fmtDeadline(dl)) : '運営が締め切るまで'}${past ? '　<b>（終了しました）</b>' : ''}</dd>`;
   box.append(facts);
-  if (closed) box.append(el('p', 'warn', 'リザルトの提出期間は終了しました。提出されていない曲は「未提出」として扱われます。'));
+  if (closed) box.append(el('p', 'waitmsg', WAIT_MSG.play), el('p', 'note', '提出されていない曲は「未提出」として扱われます。'));
   if (!closed) box.append(bulkForm(m, metric));
   for (const f of myFinals(m)) {
     const r = (m.myResults || []).find((x) => x.slot === f.slot) || null;

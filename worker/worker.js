@@ -42,7 +42,7 @@ const JACKET_BASES = [
 const CONSTS_URL = 'https://n4f1316.github.io/dxscore-tools/maimai_consts_magical.json';
 const RATE2F_URL = 'https://2frate.want131611.workers.dev/';
 const SESSION_DAYS = 30;
-const WORKER_VERSION = '2026-11-15b'; // 反映を確かめるための版（/api/public に出る）
+const WORKER_VERSION = '2026-11-16a'; // 反映を確かめるための版（/api/public に出る）
 const PHASES = ['closed', 'select', 'ban', 'pick', 'done', 'play', 'result'];
 // 部門ごとの勝敗の決め方
 //   らいむ：失点（MAX − でらっくスコア ＋ CRITICAL PERFECT 以外の BREAK の数×2）の3曲合計が少ない方
@@ -57,6 +57,7 @@ const DEFAULT_SETTINGS = {
   notice: '',          // 参加者ページに出すお知らせ
   phase: 'closed',     // closed：組み合わせ非公開 / select：自選曲の提出 / ban：BAN / pick：自選曲の決定 / done：対戦曲の確定 / play：対戦期間（リザルト提出） / result：結果発表
   phaseNote: '',       // 段階の締切など、参加者ページに出す一言
+  hold: false,         // true：いまの段階の受付を止め、次の公開まで参加者に待ってもらう（運営が段階を変えるまで非公開のまま）
   resultDeadline: '',  // リザルト提出の締切（日本時間。例 "2026-11-20T23:59"）。過ぎると提出を受け付けない。空なら段階が変わるまで
   // 部門ごとの、新しく作る対戦カードの既定値（上限・運営課題曲・運営課題曲2）
   divDefaults: { lime: { cap: 13.9, kadai: '', kadai2: '' }, lemon: { cap: 14.9, kadai: '', kadai2: '' } },
@@ -74,7 +75,7 @@ const DEFAULT_SETTINGS = {
     final: '対戦曲は自選曲・他選曲・運営課題曲の3曲です',
   },
 };
-const PUBLIC_KEYS = ['title', 'round', 'entryOpen', 'entryDeadline', 'notice', 'phase', 'phaseNote', 'format', 'notes', 'resultDeadline', 'form'];
+const PUBLIC_KEYS = ['title', 'round', 'entryOpen', 'entryDeadline', 'notice', 'phase', 'phaseNote', 'format', 'notes', 'resultDeadline', 'form', 'hold'];
 
 export default {
   async fetch(req, env, ctx) {
@@ -482,6 +483,7 @@ async function oneMatch(req, env, user, phase, phaseMsg) {
   if (!c.list.length) throw err(403, '対戦カードがまだ公開されていません');
   if (c.list.length > 1) throw err(400, 'どの試合の提出か分かりませんでした。ページを再読み込みしてください');
   if (c.s.phase !== phase) throw err(403, phaseMsg);
+  if (c.s.hold) throw err(403, '受付は終了しました。運営からの公開をお待ちください');
   return { b, c, x: c.list[0] };
 }
 
@@ -747,6 +749,7 @@ async function admin(req, env, sub, m) {
     if (b.settings) {
       if (b.settings.phase && !PHASES.includes(b.settings.phase)) throw err(400, '段階の指定が正しくありません');
       if (b.settings.format && !['main', 'mini'].includes(b.settings.format)) throw err(400, '大会の形式の指定が正しくありません');
+      if (b.settings.hold !== undefined) b.settings.hold = !!b.settings.hold;
       if (b.settings.form !== undefined) b.settings.form = normForm(b.settings.form, true);
       await putKV(env, 'settings', { ...(await getSettings(env)), ...b.settings });
     }

@@ -310,6 +310,7 @@ function renderSettingsForm() {
   $('#sDeadline').value = s.entryDeadline || ''; $('#sResultDeadline').value = s.resultDeadline || ''; $('#sNotice').value = s.notice || '';
   $('#sPhase').innerHTML = Object.entries(PHASE_LABEL).map(([k, v]) => `<option value="${k}"${k === s.phase ? ' selected' : ''}>${v}</option>`).join('');
   $('#sPhaseNote').value = s.phaseNote || '';
+  $('#sHold').checked = !!s.hold;
   $('#nPair').value = s.notes.pair; $('#nReveal').value = s.notes.reveal; $('#nBan').value = s.notes.ban || ''; $('#nFinal').value = s.notes.final; $('#nResult').value = s.notes.result || '';
   $('#sFormat').value = s.format || 'main';
   renderFormEditor();
@@ -392,7 +393,7 @@ function readSettingsForm() {
     title: $('#sTitle').value.trim(), round: '', entryOpen: $('#sOpen').checked,
     entryDeadline: $('#sDeadline').value, resultDeadline: $('#sResultDeadline').value, notice: $('#sNotice').value.trim(),
     phase: $('#sPhase').value || settings.phase, phaseNote: $('#sPhaseNote').value.trim(),
-    format: $('#sFormat').value || 'main',
+    format: $('#sFormat').value || 'main', hold: $('#sHold').checked,
   });
   settings.divDefaults = settings.divDefaults || {};
   DIVISIONS.forEach((d) => {
@@ -408,7 +409,7 @@ $('[data-pane=settings]').addEventListener('input', (e) => {
 });
 $('[data-pane=settings]').addEventListener('change', (e) => {
   if (e.target.id === 'sFormat') { readSettingsForm(); markDirty(); renderSettingsForm(); renderMatches(); return; }
-  if (e.target.id === 'sPhase') { readSettingsForm(); markDirty(); setMsg('段階を変えました。「設定と組み合わせを保存」を押すと参加者のページに反映されます', 'ok'); }
+  if (e.target.id === 'sPhase') { $('#sHold').checked = false; readSettingsForm(); markDirty(); setMsg('段階を変えました。「設定と組み合わせを保存」を押すと参加者のページに反映されます', 'ok'); }
 });
 
 // ---------- 組み合わせ・選曲（部門ごと） ----------

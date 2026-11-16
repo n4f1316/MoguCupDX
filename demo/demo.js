@@ -1,6 +1,6 @@
 // デモモード：本物の worker.js を、ブラウザの中のデータベースにつないで動かす
 // （サーバーには何も送らない。データはこのブラウザの localStorage にだけ保存）
-import worker from '../worker/worker.js?v=demo10';
+import worker from '../worker/worker.js?v=demo12';
 import { makeDB, emptyData } from './memdb.js?v=demo10';
 
 const STORE = 'mogucupdx-demo-db';
@@ -160,7 +160,7 @@ async function nextPhase() {
   if (!st.matches.length && st.settings.phase === 'closed') throw new Error('先に運営ページで組み合わせを作って保存してください');
   const i = PHASES.findIndex(([k]) => k === st.settings.phase);
   const next = PHASES[Math.min(i + 1, PHASES.length - 1)][0];
-  await call('api/admin/state', { method: 'PUT', key: ADMIN_KEY, body: { settings: { phase: next } } });
+  await call('api/admin/state', { method: 'PUT', key: ADMIN_KEY, body: { settings: { phase: next, hold: false } } });
   return PHASES.find(([k]) => k === next)[1];
 }
 
