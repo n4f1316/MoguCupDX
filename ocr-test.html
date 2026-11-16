@@ -5,28 +5,28 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="robots" content="noindex">
 <title>リザルト読み取りテスト</title>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=M+PLUS+Rounded+1c:wght@500;800&family=Zen+Kaku+Gothic+New:wght@400;700&family=JetBrains+Mono:wght@500&display=swap">
-<link rel="stylesheet" href="common.css?v=20261110b">
+<link rel="stylesheet" href="common.css?v=20261116c">
+<script src="theme.js?v=20261116c"></script>
 <style>
 main{max-width:1100px;margin:0 auto;display:grid;gap:16px}
 .row{display:flex;flex-wrap:wrap;gap:12px;align-items:end}
 .row label{display:grid;gap:4px;min-width:200px;flex:1}
-.drop{border:2px dashed var(--line);border-radius:12px;padding:24px;text-align:center;color:var(--muted);cursor:pointer}
+.drop{border:2px dashed var(--line);padding:24px;text-align:center;color:var(--muted);cursor:pointer}
 .drop.over{border-color:var(--accent);background:var(--soft)}
-.case{border:1px solid var(--line);border-radius:12px;padding:12px;display:grid;grid-template-columns:minmax(0,260px) minmax(0,1fr);gap:12px;align-items:start}
+.case{border:1px solid var(--line);padding:12px;display:grid;grid-template-columns:minmax(0,260px) minmax(0,1fr);gap:12px;align-items:start}
 @media (max-width:700px){.case{grid-template-columns:1fr}}
-.case img.src{width:100%;border-radius:8px;box-shadow:0 0 0 1px var(--line)}
+.case img.src{width:100%}
 .vals{display:grid;grid-template-columns:auto 1fr auto;gap:4px 12px;font-size:14px;align-items:center}
 .vals dt{color:var(--muted)}
 .vals dd{margin:0;font-family:var(--f-mono)}
 .vals input{padding:2px 6px;font-size:13px;width:9em}
-.ok{color:#1d7a43;font-weight:700}.ng{color:var(--danger);font-weight:700}.na{color:var(--muted)}
+.ok{color:var(--ok);font-weight:700}.ng{color:var(--danger);font-weight:700}.na{color:var(--muted)}
 .chips{display:flex;flex-wrap:wrap;gap:6px}
-.chip2{font-size:12px;padding:3px 8px;border-radius:999px;background:var(--soft)}
+.chip2{font-size:12px;padding:3px 8px;background:var(--soft)}
 .chip2.on{background:var(--accent);color:var(--accent-fg)}
 details{font-size:13px}
 .steps{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:8px;margin-top:8px}
-.steps figure{margin:0;border:1px solid var(--line);border-radius:6px;padding:4px;background:#fff}
+.steps figure{margin:0;border:1px solid var(--line);padding:4px;background:var(--soft)}
 .steps img{width:100%;image-rendering:pixelated}
 .steps figcaption{font-family:var(--f-mono);font-size:11px;white-space:pre-wrap;word-break:break-all;color:var(--fg)}
 .summary{font-size:14px}
@@ -35,6 +35,7 @@ details{font-size:13px}
 </head>
 <body>
 <main>
+<div class="site-head"><button type="button" class="theme-toggle"></button></div>
   <h1>リザルト読み取りテスト</h1>
   <p class="note">リザルト画像から、参加者ページと同じ方法で値を読み取れるかを試すページです。画像はこのブラウザの中で読むだけで、どこにも送りません。でらっくす NET のスクリーンショット、ゲーム機のリザルト画面の写真、「大会リザルト」の写真に対応しています。</p>
 

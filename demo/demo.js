@@ -167,21 +167,21 @@ async function nextPhase() {
 function bar(users, phaseLabel) {
   const css = document.createElement('style');
   css.textContent = `
-    #demoBar{position:fixed;left:0;right:0;bottom:0;z-index:50;background:#1f2d3d;color:#fff;padding:10px 16px calc(10px + env(safe-area-inset-bottom,0px));
+    #demoBar{position:fixed;left:0;right:0;bottom:0;z-index:50;background:#16122E;color:#F2F0FF;border-top:1px solid #2E2858;padding:10px 16px calc(10px + env(safe-area-inset-bottom,0px));
       display:flex;flex-wrap:wrap;gap:8px 12px;align-items:center;font-size:13px;box-shadow:0 -4px 16px rgba(31,45,61,.18)}
-    #demoBar b{font-family:var(--f-display);font-size:14px;background:#f0b429;color:#1f2d3d;border-radius:999px;padding:2px 10px}
-    #demoBar select,#demoBar button{font:inherit;font-size:13px;border-radius:6px;padding:5px 10px;width:auto}
-    #demoBar select{background:#fff;color:#1f2d3d;border:0}
-    #demoBar button{background:#2f4a66;color:#fff;border:1px solid #4a6a8c;cursor:pointer}
-    #demoBar button.on{background:#2a6fb8;border-color:#2a6fb8}
-    #demoBar .msg{color:#cfe3f7;min-height:0}
+    #demoBar b{font-family:var(--f-display);font-size:14px;background:#FFD86B;color:#0E0B1F;padding:2px 10px}
+    #demoBar select,#demoBar button{font:inherit;font-size:13px;border-radius:0;padding:5px 10px;width:auto}
+    #demoBar select{background:#0E0B1F;color:#F2F0FF;border:1px solid #2E2858}
+    #demoBar button{background:#0E0B1F;color:#F2F0FF;border:1px solid #A9A3D6;cursor:pointer}
+    #demoBar button.on{background:#4DE1FF;border-color:#4DE1FF;color:#0E0B1F}
+    #demoBar .msg{color:#A9A3D6;min-height:0}
     #demoBar .grp{display:flex;flex-wrap:wrap;gap:6px;align-items:center}`;
   document.head.append(css);
   const el = document.createElement('div');
   el.id = 'demoBar';
   el.innerHTML = `<b>デモ</b>
     <div class="grp"><button type="button" class="${isAdmin ? 'on' : ''}" data-act="admin">運営ページ</button>
-      <label class="grp" style="color:#fff">参加者として見る
+      <label class="grp" style="color:#F2F0FF">参加者として見る
         <select id="demoUser"><option value="">（ログアウトして見る）</option>${users.map((u) => `<option value="${u.username}">${u.label}</option>`).join('')}</select></label></div>
     <div class="grp"><span>いまの段階：<span id="demoPhase">${phaseLabel}</span></span>
       <button type="button" data-act="next">次の段階へ</button>

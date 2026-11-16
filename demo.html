@@ -5,17 +5,17 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="robots" content="noindex">
 <title>もぐらたたきカップ デモ</title>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=M+PLUS+Rounded+1c:wght@500;800&family=Zen+Kaku+Gothic+New:wght@400;700&display=swap">
-<link rel="stylesheet" href="common.css?v=20261015b">
+<link rel="stylesheet" href="common.css?v=20261116c">
+<script src="theme.js?v=20261116c"></script>
 <style>
 main{max-width:720px;margin:0 auto;display:grid;gap:16px}
 .hero{display:flex;gap:16px;align-items:center}
 .hero img{width:88px;height:88px;flex:none}
-.eyebrow{font-size:12px;letter-spacing:.08em;color:var(--accent);font-weight:700}
+.eyebrow{font-family:var(--f-display);font-size:12px;letter-spacing:3px;color:var(--muted);font-weight:700}
 ol{margin:0;padding-left:1.4em;display:grid;gap:10px}
 ol li b{color:var(--accent)}
 .cta{display:flex;flex-wrap:wrap;gap:8px}
-.cta a{display:inline-block;padding:9px 16px;border-radius:8px;text-decoration:none;font-weight:700;border:1px solid var(--line);background:var(--soft);color:var(--fg)}
+.cta a{display:inline-block;padding:9px 16px;text-decoration:none;font-weight:700;border:1px solid var(--line);background:var(--soft);color:var(--fg)}
 .cta a.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-fg)}
 table{border-collapse:collapse;font-size:14px;width:100%}
 td,th{border-bottom:1px solid var(--line);padding:6px 8px;text-align:left}
@@ -24,6 +24,7 @@ td,th{border-bottom:1px solid var(--line);padding:6px 8px;text-align:left}
 </head>
 <body>
 <main>
+<div class="site-head"><button type="button" class="theme-toggle"></button></div>
   <header class="hero">
     <img src="logo3rd.svg?v=1" alt="">
     <div>

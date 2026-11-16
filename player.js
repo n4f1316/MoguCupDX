@@ -401,13 +401,11 @@ function browser(m) {
   const search = el('input', 'search');
   search.type = 'search'; search.id = 'songSearch-' + m.id; search.placeholder = '曲名で絞り込み'; search.value = browse.q;
   search.setAttribute('aria-label', '曲名で絞り込み');
-  const lvTabs = el('div', 'tabs'); lvTabs.setAttribute('role', 'group'); lvTabs.setAttribute('aria-label', 'レベル');
-  ['all', ...levels].forEach((lv) => {
-    const b = el('button', '', lv === 'all' ? 'すべて' : 'Lv' + lv); b.type = 'button';
-    b.setAttribute('aria-pressed', browse.level === lv);
-    b.onclick = () => { browse.level = lv; browse.page = 1; rerender(m); };
-    lvTabs.append(b);
-  });
+  // レベルはドロップダウンで選ぶ
+  const lvSel = el('select'); lvSel.id = 'songLevel-' + m.id;
+  ['all', ...levels].forEach((lv) => { const o = el('option', '', lv === 'all' ? 'すべてのレベル' : 'Lv' + lv); o.value = lv; o.selected = browse.level === lv; lvSel.append(o); });
+  lvSel.onchange = () => { browse.level = lvSel.value; browse.page = 1; draw(); };
+  const lvPick = el('label', 'lvpick'); lvPick.append(el('span', '', 'レベル'), lvSel);
   const dTabs = el('div', 'tabs'); dTabs.setAttribute('role', 'group'); dTabs.setAttribute('aria-label', '難易度');
   DIFF_ORDER.forEach((d) => {
     const b = el('button', '', DIFF_SHORT[d]); b.type = 'button';
@@ -415,8 +413,10 @@ function browser(m) {
     b.onclick = () => { browse.diffs.has(d) ? browse.diffs.delete(d) : browse.diffs.add(d); if (!browse.diffs.size) browse.diffs.add(d); browse.page = 1; rerender(m); };
     dTabs.append(b);
   });
-  const count = el('div', 'note');
+  const count = el('div', 'lvcount');
   const list = el('div', 'list');
+  const panel = el('div', 'lvpanel'); panel.append(count, list);
+  const filters = el('div', 'filters'); filters.append(lvPick, dTabs);
   const pager = el('div', 'pager');
 
   const draw = () => {
@@ -456,7 +456,7 @@ function browser(m) {
     }
   };
   search.addEventListener('input', () => { browse.q = search.value; browse.page = 1; draw(); });
-  wrap.append(el('h2', '', '楽曲一覧'), search, lvTabs, dTabs, count, list, pager);
+  wrap.append(el('h2', '', '楽曲一覧'), search, filters, panel, pager);
   draw();
   return wrap;
 }

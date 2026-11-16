@@ -1,41 +1,76 @@
-/* もぐらたたきカップ 共通スタイル：白と青。目が疲れにくいよう、真っ白ではなく少し青みのある白に濃紺の文字 */
+/* もぐらたたきカップ 共通スタイル：2fRATE（α版）と同じデザイン
+   - 配色は :root（ライト）と html[data-theme="dark"]（ダーク）の変数で切り替える。切り替えは theme.js
+   - 角は丸めない・影や発光は使わない・区切りは罫線、が基本 */
+@import url("https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&family=Noto+Sans+JP:wght@400;500;700&display=swap");
+
 :root{
-  --bg:#f3f7fb; --panel:#ffffff; --fg:#1f2d3d; --muted:#5b6f86; --line:#d6e2ee;
-  --accent:#2a6fb8; --accent-fg:#ffffff; --soft:#e7f0f9; --danger:#c8323f; --ok:#23804a;
-  --f-display:"M PLUS Rounded 1c","Hiragino Maru Gothic ProN",system-ui,sans-serif;
-  --f-body:"Zen Kaku Gothic New","Hiragino Sans","Noto Sans JP",system-ui,sans-serif;
-  --f-mono:"JetBrains Mono",ui-monospace,monospace;
+  --bg:#F4F5F7; --panel:#F4F5F7; --soft:#E6E7EC; --line:#D5D6DE; --fg:#12101F; --muted:#55516E;
+  --accent:#007A99; --accent-fg:#F4F5F7; --danger:#C0303A; --ok:#1E7A3C; --gold:#8A5A00; --ph:#D5D6DE;
+  --dx:#B8460B; --st:#1565B0; --remas:#6B2FB3;
+  --rings: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='400' height='400' fill='none' stroke='%23DCDDE4'%3E%3Ccircle cx='400' cy='0' r='60'/%3E%3Ccircle cx='400' cy='0' r='100'/%3E%3Ccircle cx='400' cy='0' r='140'/%3E%3Ccircle cx='400' cy='0' r='180' stroke='%23007A99' stroke-opacity='.6'/%3E%3Ccircle cx='400' cy='0' r='220'/%3E%3Ccircle cx='400' cy='0' r='260'/%3E%3Ccircle cx='400' cy='0' r='300'/%3E%3Ccircle cx='400' cy='0' r='340'/%3E%3Ccircle cx='400' cy='0' r='380'/%3E%3C/svg%3E");
+  --rings2: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='260' height='260' fill='none' stroke='%23DCDDE4'%3E%3Ccircle cx='0' cy='260' r='70'/%3E%3Ccircle cx='0' cy='260' r='110'/%3E%3Ccircle cx='0' cy='260' r='150'/%3E%3Ccircle cx='0' cy='260' r='190'/%3E%3Ccircle cx='0' cy='260' r='230'/%3E%3C/svg%3E");
+  --f-display:"Chakra Petch","Noto Sans JP","Hiragino Sans",sans-serif;
+  --f-body:"Noto Sans JP","Hiragino Sans","Yu Gothic",sans-serif;
+  --f-mono:"Chakra Petch","Noto Sans JP",sans-serif;
   color-scheme:light;
+}
+html[data-theme="dark"]{
+  --bg:#0E0B1F; --panel:#0E0B1F; --soft:#16122E; --line:#2E2858; --fg:#F2F0FF; --muted:#A9A3D6;
+  --accent:#4DE1FF; --accent-fg:#0E0B1F; --danger:#FF7A85; --ok:#6FD98C; --gold:#FFD86B; --ph:#2A2550;
+  --dx:#FFB37A; --st:#7CC4FF; --remas:#D9B8FF;
+  --rings: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='400' height='400' fill='none' stroke='%232A2550'%3E%3Ccircle cx='400' cy='0' r='60'/%3E%3Ccircle cx='400' cy='0' r='100'/%3E%3Ccircle cx='400' cy='0' r='140'/%3E%3Ccircle cx='400' cy='0' r='180' stroke='%234DE1FF' stroke-opacity='.6'/%3E%3Ccircle cx='400' cy='0' r='220'/%3E%3Ccircle cx='400' cy='0' r='260'/%3E%3Ccircle cx='400' cy='0' r='300'/%3E%3Ccircle cx='400' cy='0' r='340'/%3E%3Ccircle cx='400' cy='0' r='380'/%3E%3C/svg%3E");
+  --rings2: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='260' height='260' fill='none' stroke='%232A2550'%3E%3Ccircle cx='0' cy='260' r='70'/%3E%3Ccircle cx='0' cy='260' r='110'/%3E%3Ccircle cx='0' cy='260' r='150'/%3E%3Ccircle cx='0' cy='260' r='190'/%3E%3Ccircle cx='0' cy='260' r='230'/%3E%3C/svg%3E");
+  color-scheme:dark;
 }
 *{box-sizing:border-box}
 [hidden]{display:none!important}
-/* 部門の色：らいむ＝黄緑、れもん＝黄色（部門名の文字の背景だけに使う） */
-.divpill{display:inline-block;padding:0 .55em;border-radius:999px;color:#1f2d3d;font-weight:700;line-height:1.6}
-.divpill.lime{background:#c6ec7e}
-.divpill.lemon{background:#ffe259}
-html{-webkit-text-size-adjust:100%}
-body{margin:0;background:var(--bg);color:var(--fg);font-family:var(--f-body);font-size:15px;line-height:1.7;padding:16px}
-h1{font-family:var(--f-display);font-weight:800;font-size:1.6rem;line-height:1.3;margin:0;text-wrap:balance}
-h2{font-family:var(--f-display);font-size:1.05rem;margin:0 0 8px}
+html{background:var(--bg);-webkit-text-size-adjust:100%}
+body{margin:0;color:var(--fg);font-family:var(--f-body);font-size:14px;line-height:1.7;
+  padding:calc(16px + env(safe-area-inset-top,0px)) 16px calc(16px + env(safe-area-inset-bottom,0px))}
+/* 背景のリング：右上と左下 */
+body::before{content:"";position:fixed;inset:0;z-index:-1;pointer-events:none;
+  background:var(--rings) top right no-repeat,var(--rings2) bottom left no-repeat}
+/* ページ上部：表示（ライト／ダーク）の切り替え */
+.site-head{display:flex;align-items:center;justify-content:flex-end;gap:12px}
+.theme-toggle{min-height:36px;font-size:12px}
+/* 部門の色：らいむ＝黄緑、れもん＝黄色（ライト・ダーク共通。部門名の文字の背景だけに使う） */
+.divpill{display:inline-block;padding:0 .55em;color:#12101F;font-weight:700;line-height:1.6}
+.divpill.lime{background:#B5E05A}
+.divpill.lemon{background:#FFD86B}
+h1{font-family:var(--f-display);font-weight:700;font-size:1.6rem;line-height:1.3;margin:0;text-wrap:balance}
+/* 見出し：下に太い線 */
+h2{font-family:var(--f-display);font-weight:700;font-size:1rem;letter-spacing:.04em;margin:0 0 8px;padding-bottom:6px;border-bottom:2px solid var(--fg)}
 a{color:var(--accent)}
-.panel{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:16px;display:grid;gap:14px;min-width:0}
+.panel{background:var(--panel);border:1px solid var(--line);padding:16px;display:grid;gap:14px;min-width:0}
 label{display:grid;gap:2px;font-size:13px;color:var(--muted)}
-input,select,textarea{font:inherit;font-size:15px;color:var(--fg);background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:7px 9px;min-width:0;width:100%}
-input[type=checkbox],input[type=radio]{width:auto}
-input:focus-visible,select:focus-visible,textarea:focus-visible,button:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
-button{font:inherit;cursor:pointer;border-radius:6px;border:1px solid var(--line);background:var(--soft);color:var(--fg);padding:7px 14px}
-button:disabled{opacity:.5;cursor:not-allowed}
-button.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-fg);font-weight:700}
-button.ghost{background:transparent}
-button.danger{color:var(--danger);background:transparent}
+input,select,textarea{font:inherit;font-size:16px;color:var(--fg);background:var(--bg);border:1px solid var(--line);border-radius:0;padding:7px 9px;min-width:0;width:100%}
+input[type=checkbox],input[type=radio]{width:auto;accent-color:var(--accent)}
+input:focus-visible,select:focus-visible,textarea:focus-visible,button:focus-visible,a:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+button{font:inherit;font-weight:700;cursor:pointer;border-radius:0;border:1px solid var(--muted);background:var(--bg);color:var(--fg);padding:6px 14px}
+button:disabled{opacity:.45;cursor:not-allowed}
+button.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-fg)}
+button.ghost{background:transparent;border-color:var(--line);font-weight:500}
+button.danger{color:var(--danger);border-color:var(--danger);background:transparent}
 .btns{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
 .row{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px}
 .note{font-size:13px;color:var(--muted);margin:0}
 .msg{margin:0;font-size:14px;min-height:1.5em}
-.msg.err{color:var(--danger)} .msg.ok{color:var(--ok)}
+.msg.err{color:var(--danger);font-weight:700} .msg.ok{color:var(--ok)}
 .mono{font-family:var(--f-mono)}
 .num{font-variant-numeric:tabular-nums}
+/* 状態のラベル（未提出・確認待ち・承認・差し戻し）：枠と文字の色で示す */
+.st-none{border:1px solid var(--line);color:var(--muted)} .st-pending{border:1px solid var(--gold);color:var(--gold)}
+.st-ok{border:1px solid var(--ok);color:var(--ok)} .st-ng{border:1px solid var(--danger);color:var(--danger)}
 
 /* 参加者ページの、告知画像と同じ形の表示 */
-.matchimg{border:1px solid var(--line);border-radius:8px;overflow:hidden;background:var(--soft)}
+.matchimg{border:1px solid var(--line);overflow:hidden;background:var(--soft)}
 .matchimg canvas{display:block;width:100%;height:auto}
+
+/* 背景のロゴ（theme.js の BG_LOGO で切り替え。off＝なし／corner＝右下／center＝中央） */
+html[data-bglogo="corner"] body::after,html[data-bglogo="center"] body::after{content:"";position:fixed;z-index:-1;pointer-events:none;
+  background:url("logo3rd.svg?v=1") center/contain no-repeat;opacity:.07}
+html[data-bglogo="corner"] body::after{right:-60px;bottom:-60px;width:min(360px,70vw);aspect-ratio:1}
+html[data-bglogo="center"] body::after{inset:0;margin:auto;width:min(640px,90vw);aspect-ratio:1;opacity:.045}
+/* ダークではロゴの白黒を反転して、線が浮きすぎないようにする */
+html[data-theme="dark"][data-bglogo] body::after{filter:invert(1);opacity:.09}
+html[data-theme="dark"][data-bglogo="center"] body::after{opacity:.06}
