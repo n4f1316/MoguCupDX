@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="robots" content="noindex">
+<title>告知画像を作る｜もぐらたたきカップ</title>
+<link rel="stylesheet" href="common.css?v=20261116c">
+<script src="theme.js?v=20261116c"></script>
+<style>
+main{max-width:1280px;margin:0 auto;display:grid;gap:16px}
+.cols{display:grid;grid-template-columns:minmax(300px,380px) minmax(0,1fr);gap:16px;align-items:start}
+@media (max-width:860px){.cols{grid-template-columns:1fr}}
+#form{position:sticky;top:12px;max-height:calc(100vh - 24px);overflow:auto}
+@media (max-width:860px){#form{position:static;max-height:none}}
+#form h2{margin-top:6px}
+.checks{display:flex;flex-wrap:wrap;gap:6px 16px}
+.checks label{display:flex;gap:6px;align-items:center;color:var(--fg);font-size:14px}
+#dates{display:grid;gap:8px}
+#slides{display:grid;gap:16px}
+.slide{margin:0;border:1px solid var(--line)}
+.slide figcaption{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:8px 12px;background:var(--soft);border-bottom:1px solid var(--line)}
+.slide canvas{display:block;width:100%;height:auto}
+</style>
+</head>
+<body>
+<main>
+<div class="site-head"><button type="button" class="theme-toggle"></button></div>
+<header style="display:grid;gap:4px;padding-bottom:8px;border-bottom:2px solid var(--fg)">
+  <h1>告知画像を作る</h1>
+  <p class="note">大会名・形式・開催する部門・日程を入れると、X に貼れる説明用の画像（1600×900）を5枚作ります。入力した内容はこのブラウザに保存されます。日程を空欄にすると、書き込み用の空欄になります。</p>
+</header>
+<div class="cols">
+  <form class="panel" id="form" onsubmit="return false">
+    <h2>大会</h2>
+    <label>大会名<input id="f_title" type="text" maxlength="40" placeholder="例 第3回 もぐらたたきカップ"></label>
+    <label>形式<select id="f_format">
+      <option value="main">本編（自選曲・他選曲・運営課題曲の3曲）</option>
+      <option value="mini">mini（運営課題曲なし、自選曲の投げ合いのみ）</option>
+    </select></label>
+    <label>画像の配色<select id="f_theme"><option value="light">ライト</option><option value="dark">ダーク</option></select></label>
+    <h2>開催する部門</h2>
+    <div class="checks">
+      <label><input id="f_lime" type="checkbox">らいむ部門（でらっくスコア）</label>
+      <label><input id="f_lemon" type="checkbox">れもん部門（達成率）</label>
+    </div>
+    <div class="row">
+      <label id="rowCapLime">らいむ部門の上限（定数）<input id="f_capLime" type="text" inputmode="decimal" maxlength="12"></label>
+      <label id="rowCapLemon">れもん部門の上限（定数）<input id="f_capLemon" type="text" inputmode="decimal" maxlength="12"></label>
+    </div>
+    <div class="checks">
+      <label id="rowLv14"><input id="f_lv14" type="checkbox">らいむ部門のレベル14解禁を載せる</label>
+      <label><input id="f_same" type="checkbox">両者が同じ曲を選んだ場合の説明を載せる</label>
+    </div>
+    <h2>日程（空欄可）</h2>
+    <p class="note">表紙には「参加申請」と「対戦・リザルト提出」の日程が、申込期間・対戦期間として入ります。</p>
+    <div id="dates"></div>
+    <h2>申込先・連絡先</h2>
+    <label>参加者ページの URL<input id="f_url" type="text" maxlength="100"></label>
+    <label>お問い合わせ先（空欄可）<input id="f_contact" type="text" maxlength="60" placeholder="例 X @mogucup の DM まで"></label>
+    <label>注意書き（空欄可）<textarea id="f_note" rows="3" maxlength="200" placeholder="例 連絡は Discord で行います。申込後にサーバーへご参加ください。"></textarea></label>
+    <div class="btns">
+      <button type="button" class="primary" id="saveAll">5枚まとめて保存</button>
+      <button type="button" class="ghost" id="reset">入力を初期値に戻す</button>
+    </div>
+  </form>
+  <div id="slides"></div>
+</div>
+</main>
+<script src="config.js?v=20261110b"></script>
+<script src="announce.js?v=20261116j"></script>
+</body>
+</html>
